@@ -190,11 +190,153 @@ input::placeholder { color: var(--mut); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 .sl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--mut); margin-bottom: 8px; }
 
-/* ── MODIFIER SCREEN ── */
-.mod-screen-header { text-align: center; margin-bottom: 18px; }
-.mod-screen-title { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 32px; letter-spacing: 4px; color: var(--acc); }
-.mod-screen-sub { font-size: 10px; color: var(--mut); letter-spacing: 2px; margin-top: 3px; }
+/* ── CINEMATIC CARD PICKING ── */
 
+/* Tray */
+.pick-tray { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin: 20px 0; }
+
+/* Black category tray cards */
+.tray-card {
+  aspect-ratio: 2/3; border-radius: 14px; position: relative; cursor: default;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, #1a0a10, #0f0508);
+  border: 1px solid rgba(255,107,157,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  transform-style: preserve-3d; perspective: 800px;
+  transition: border-color 0.4s, box-shadow 0.4s;
+  overflow: hidden;
+}
+.tray-card::before {
+  content:''; position:absolute; inset:0; border-radius:14px;
+  background: repeating-linear-gradient(45deg, rgba(255,107,157,0.02) 0px, rgba(255,107,157,0.02) 1px, transparent 1px, transparent 8px);
+}
+.tray-card.slide-left { animation: traySlideLeft 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+.tray-card.slide-right { animation: traySlideRight 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+@keyframes traySlideLeft { from{transform:translateX(-130vw) rotate(-8deg);opacity:0} to{transform:translateX(0) rotate(0);opacity:1} }
+@keyframes traySlideRight { from{transform:translateX(130vw) rotate(8deg);opacity:0} to{transform:translateX(0) rotate(0);opacity:1} }
+
+.tray-card.active-phase { border-color: rgba(255,107,157,0.6); box-shadow: 0 0 30px rgba(255,107,157,0.2), 0 8px 32px rgba(0,0,0,0.6); animation: trayPulse 2s infinite; }
+@keyframes trayPulse { 0%,100%{box-shadow:0 0 20px rgba(255,107,157,0.15),0 8px 32px rgba(0,0,0,0.6)} 50%{box-shadow:0 0 40px rgba(255,107,157,0.35),0 8px 32px rgba(0,0,0,0.6)} }
+
+.tray-card.done-phase { border-color: rgba(255,107,157,0.5); }
+.tray-card.done-phase .tray-card-icon { font-size: 32px; }
+.tray-card.done-phase .tray-card-label { font-size: 10px; color: var(--acc); }
+
+.tray-card-icon { font-size: 40px; margin-bottom: 10px; z-index: 1; transition: all 0.4s; }
+.tray-card-label {
+  font-family: 'Bebas Neue', Impact, sans-serif; font-size: 14px; letter-spacing: 3px;
+  color: rgba(255,255,255,0.4); z-index: 1; text-align: center; line-height: 1.3;
+  transition: color 0.4s;
+}
+.tray-card-sublabel { font-size: 8px; letter-spacing: 2px; color: rgba(255,255,255,0.2); margin-top: 4px; z-index: 1; }
+.tray-card-result-name { font-family:'Bebas Neue',Impact,sans-serif; font-size:13px; color:var(--acc); letter-spacing:2px; margin-top:6px; z-index:1; text-align:center; }
+
+/* Flip reveal on tray card */
+.tray-card.flip-in { animation: trayFlipReveal 0.6s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+@keyframes trayFlipReveal {
+  0% { transform: rotateY(0deg); }
+  50% { transform: rotateY(90deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+/* Phase popup overlay */
+.pick-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 800;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20px; gap: 16px; backdrop-filter: blur(4px);
+  animation: overlayFadeIn 0.3s ease;
+}
+@keyframes overlayFadeIn { from{opacity:0;backdrop-filter:blur(0)} to{opacity:1;backdrop-filter:blur(4px)} }
+
+.pick-overlay-title {
+  font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; letter-spacing: 4px;
+  color: var(--acc); text-align: center; margin-bottom: 4px;
+}
+.pick-overlay-sub { font-size: 10px; color: var(--mut); letter-spacing: 2px; text-align: center; margin-bottom: 8px; }
+
+/* Cards inside popup — reuse .mod-card base but wrapped in popup-grid */
+.pick-popup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 540px; }
+
+.pick-popup-grid .mod-card {
+  animation: popCardOut 0.45s cubic-bezier(0.34,1.4,0.64,1) both;
+}
+@keyframes popCardOut {
+  from { transform: scale(0.2) translateY(60px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);      opacity: 1; }
+}
+.pick-popup-grid .mod-card:nth-child(1) { animation-delay: 0.05s; }
+.pick-popup-grid .mod-card:nth-child(2) { animation-delay: 0.15s; }
+.pick-popup-grid .mod-card:nth-child(3) { animation-delay: 0.25s; }
+
+.pick-popup-grid .mod-card.fly-back {
+  animation: cardFlyBack 0.4s cubic-bezier(0.6,0,1,0.4) forwards;
+}
+.pick-popup-grid .mod-card.fade-out {
+  animation: cardFadeOut 0.3s ease forwards;
+}
+@keyframes cardFlyBack { to { transform: scale(0.05); opacity: 0; } }
+@keyframes cardFadeOut { to { transform: scale(0.85); opacity: 0; } }
+
+/* Timer inside popup */
+.pick-timer-row { display:flex; align-items:center; gap:10px; margin-top:4px; }
+.pick-timer-svg { width:36px; height:36px; transform:rotate(-90deg); }
+.pick-timer-bg  { fill:none; stroke:var(--sur2); stroke-width:4; }
+.pick-timer-fill{ fill:none; stroke:var(--acc); stroke-width:4; stroke-linecap:round; transition:stroke-dashoffset 0.15s linear, stroke 0.3s; }
+.pick-timer-txt { font-family:'Bebas Neue',Impact,sans-serif; font-size:22px; color:var(--acc); letter-spacing:2px; transition:color 0.3s; }
+.pick-timer-row.hurry .pick-timer-fill { stroke: var(--red); }
+.pick-timer-row.hurry .pick-timer-txt  { color: var(--red); animation: pulse 0.5s infinite; }
+
+/* Skip/normal button */
+.pick-normal-btn {
+  padding: 9px 24px; font-family:'Bebas Neue',Impact,sans-serif; font-size:14px; letter-spacing:2px;
+  border: 1px solid var(--brd); background: transparent; color: var(--mut); border-radius: 8px; cursor: pointer; transition: all .15s;
+}
+.pick-normal-btn:hover { border-color: var(--txt); color: var(--txt); }
+.pick-normal-btn.voted { border-color: var(--acc); color: var(--acc); background: rgba(255,107,157,0.08); }
+
+/* Waiting label inside popup */
+.pick-waiting-label { font-size:11px; color:var(--mut); letter-spacing:2px; text-align:center; padding:8px; }
+
+/* Mystery perk cards */
+.mystery-card {
+  aspect-ratio: 2/3; border-radius: 12px; background: linear-gradient(145deg,#1a0a10,#0f0508);
+  border: 1px solid rgba(245,203,92,0.3); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; cursor: pointer; position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  animation: popCardOut 0.45s cubic-bezier(0.34,1.4,0.64,1) both;
+}
+.mystery-card:nth-child(1) { animation-delay: 0.05s; }
+.mystery-card:nth-child(2) { animation-delay: 0.15s; }
+.mystery-card:nth-child(3) { animation-delay: 0.25s; }
+.mystery-card:hover:not(.shaking):not(.revealed) { border-color: #f5cb5c; box-shadow: 0 0 20px rgba(245,203,92,0.25); }
+.mystery-card-q { font-size: 42px; opacity: 0.3; }
+.mystery-card-hint { font-size: 9px; color: rgba(245,203,92,0.4); letter-spacing: 2px; margin-top: 6px; font-family:'DM Mono',monospace; }
+.mystery-card.shaking { animation: mysteryShake 0.15s infinite; border-color: #f5cb5c; box-shadow: 0 0 30px rgba(245,203,92,0.4); cursor: default; }
+@keyframes mysteryShake {
+  0%,100%{transform:translateX(0) rotate(0deg)}
+  25%{transform:translateX(-7px) rotate(-3deg)}
+  75%{transform:translateX(7px) rotate(3deg)}
+}
+.mystery-card.revealed { cursor: default; border-color: #f5cb5c; box-shadow: 0 0 24px rgba(245,203,92,0.35); animation: mysteryReveal 0.5s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+@keyframes mysteryReveal { from{transform:scale(0.6) rotate(-5deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
+.mystery-card .mod-icon { font-size: 36px; }
+.mystery-card .mod-name { font-family:'Bebas Neue',Impact,sans-serif; font-size:14px; letter-spacing:2px; color:#f5cb5c; margin-top:6px; text-align:center; padding:0 6px; }
+.mystery-card .mod-desc-sm { font-size:9px; color:var(--mut); margin-top:4px; text-align:center; padding:0 8px; line-height:1.4; }
+
+/* Countdown overlay */
+.countdown-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:900; pointer-events:none;
+  display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;
+}
+.countdown-num {
+  font-family:'Bebas Neue',Impact,sans-serif; font-size:120px; color:var(--acc);
+  line-height:1; text-shadow:0 0 60px rgba(255,107,157,0.6);
+  animation: countPop 0.4s cubic-bezier(0.34,1.4,0.64,1);
+}
+.countdown-label { font-size:14px; letter-spacing:4px; color:var(--mut); }
+@keyframes countPop { from{transform:scale(2.5);opacity:0} to{transform:scale(1);opacity:1} }
+
+/* ── OLD MOD GRID (kept for fallback) ── */
 .mod-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 
 .mod-card {

@@ -257,313 +257,450 @@ function renderWaitPick(){
 
 // ── MODIFIER SCREEN ──────────────────────────────────────────
 let modifierTimerInterval = null;
+let pickPhaseTimer = null;
+let _pickCenterDir = null; // randomised once per session
+
 function renderModifiers(){
   const screen=d("screen");
   const data=S.roomData||{};
-  const players=Object.keys(data.players||{});
-  const sharedPool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
-  const myPerks=pickPerks(S.roomCode, S.username);
-  const fullPool=[...sharedPool, ...myPerks];
+  _pickCenterDir = Math.random()<0.5?"left":"right";
 
   screen.append(
     el("div",{class:"logo",style:"font-size:32px;margin-bottom:2px"},"GUESSR"),
-    d("mod-screen-header",
-      el("div",{class:"mod-screen-title"},"ROUND MODIFIERS"),
-      el("div",{class:"mod-screen-sub"},"VOTE FOR THE CHAOS YOU WANT — BOTH MUST AGREE TO ACTIVATE")
+    el("div",{class:"mod-screen-header"},
+      el("div",{class:"mod-screen-title"},"CHOOSE YOUR CHAOS"),
+      el("div",{class:"mod-screen-sub"},"3 ROUNDS OF CARDS — YOUR FATE IS SEALED")
     )
   );
 
-  const grid=d("mod-grid");
-  grid.id="modgrid";
-  fullPool.forEach((mod,idx)=>{
-    const card = buildModCard(mod,data,players);
+  // 3 black tray cards
+  const tray = d("pick-tray"); tray.id="picktray";
+  const categories = [
+    {id:"visual",  icon:"🎨", label:"VISUAL\nCARDS",  sub:"COSMETICS"},
+    {id:"gameplay",icon:"🎮", label:"GAMEPLAY\nCARDS", sub:"RULES"},
+    {id:"perks",   icon:"⚡", label:"PERK\nCARDS",    sub:"PERSONAL"},
+  ];
+  const dirs = ["left", _pickCenterDir==="left"?"left":"right", "right"];
+  const delays = [0, 200, 100]; // left→center→right stagger feel
+  categories.forEach((cat,i)=>{
+    const card = d("tray-card"); card.id="traycard-"+cat.id;
+    card.append(
+      el("div",{class:"tray-card-icon"},cat.icon),
+      el("div",{class:"tray-card-label"},cat.label),
+      el("div",{class:"tray-card-sublabel"},cat.sub)
+    );
     card.style.opacity="0";
-    card.style.animation=`modSlideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`;
-    card.style.animationDelay=`${idx * 0.05}s`;
-    grid.append(card);
+    setTimeout(()=>{
+      card.style.opacity="1";
+      card.classList.add("slide-"+dirs[i]);
+    }, delays[i]);
+    tray.append(card);
   });
-  screen.append(grid);
+  screen.append(tray);
 
-  // Play normal button + count
-  const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
-  const myNormal=normalVotes.includes(S.username);
-  const normalBtn=el("button",{class:"mod-normal-btn",id:"normalbtn"},myNormal?"✓ PLAY NORMAL (you voted)":"PLAY NORMAL");
-  const normalCount=el("div",{class:"mod-normal-count",id:"normalcount"},`${normalVotes.length}/2 voted to skip`);
-  normalBtn.classList.toggle("voted",myNormal);
-  normalBtn.addEventListener("click",toggleNormalVote);
-
-  // Host start button & Circular Timer
-  const startArea=d("",normalBtn,normalCount);
-  
-  const timerWrap = d("mod-timer-wrap");
-  timerWrap.id="modtimerwrap";
-  const timerSvg = document.createElementNS("http://www.w3.org/2000/svg","svg");
-  timerSvg.setAttribute("class","mod-timer-svg");
-  timerSvg.setAttribute("viewBox","0 0 40 40");
-  const bgCirc = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  bgCirc.setAttribute("class","mod-timer-bg");
-  bgCirc.setAttribute("cx","20"); bgCirc.setAttribute("cy","20"); bgCirc.setAttribute("r","16");
-  const fillCirc = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  fillCirc.setAttribute("class","mod-timer-fill");
-  fillCirc.setAttribute("id","modtimerfill");
-  fillCirc.setAttribute("cx","20"); fillCirc.setAttribute("cy","20"); fillCirc.setAttribute("r","16");
-  fillCirc.setAttribute("stroke-dasharray","100.53"); // 2 * PI * 16 = 100.53
-  fillCirc.setAttribute("stroke-dashoffset","0");
-  timerSvg.append(bgCirc,fillCirc);
-  
-  const timerText = el("div",{class:"mod-timer-text",id:"modtimertext"},"30");
-  timerWrap.append(timerSvg, timerText);
-
-  startArea.append(timerWrap);
-  screen.append(startArea);
-
-  if(modifierTimerInterval) clearInterval(modifierTimerInterval);
-  modifierTimerInterval = setInterval(()=>{
-    if(S.screen !== "modifiers") return clearInterval(modifierTimerInterval);
-    const deadline = S.roomData?.modifierDeadline;
-    if(!deadline) return;
-    const msLeft = deadline - Date.now();
-    const left = Math.max(0, Math.ceil(msLeft/1000));
-    
-    const txt = document.getElementById("modtimertext");
-    if(txt) txt.textContent = left;
-    
-    const fill = document.getElementById("modtimerfill");
-    if(fill){
-      // Max time is 30s. If deadline was shortened to 5s, the ratio is based on the 30s max to show a jump, 
-      // but here let's just make it visually drain over 30s.
-      const pct = Math.max(0, Math.min(1, msLeft / 30000));
-      const offset = 100.53 - (pct * 100.53);
-      fill.setAttribute("stroke-dashoffset", offset);
-    }
-    
-    const wrap = document.getElementById("modtimerwrap");
-    if(wrap){
-      wrap.classList.toggle("hurry", left <= 5);
-    }
-    
-    if(left <= 0 && S.isHost){
-      clearInterval(modifierTimerInterval);
-      startFromModifiers();
-    }
-  }, 100);
+  // Restore existing state if rejoining mid-pick
+  const phase = data.pickingPhase||"tray";
+  setTimeout(()=>{ syncPickPhase(data, phase); }, 1100);
 
   return screen;
 }
 
-function buildModCard(mod,data,players){
-  let myVoted = false;
-  let bothVoted = false;
-  let votes = [];
-  
-  if(mod.type==="hint" || mod.type==="sabotage"){
-    myVoted = data.players?.[S.username]?.perk === mod.id;
-  } else {
-    votes = data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
-    myVoted = votes.includes(S.username);
-    bothVoted = votes.length>=2;
-  }
-  
-  const cls=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted&&mod.type!=="hint"&&mod.type!=="sabotage"?" single-voted":""}${(mod.type==="hint"||mod.type==="sabotage")&&myVoted?" perk-selected":""}`;
-  const card=d(cls);
-  card.id="modcard-"+mod.id;
-
-  const typeBadge=el("span",{class:`mod-type-badge ${mod.type}`},mod.type.toUpperCase());
-  const icon=el("span",{class:"mod-icon"},mod.icon);
-  const name=el("div",{class:"mod-name"},mod.name);
-  const desc=el("div",{class:"mod-desc"},mod.desc);
-
-  let voteBtnText = "";
-  if(mod.type==="hint" || mod.type==="sabotage"){
-    voteBtnText = myVoted?"⚡ CHOSEN PERK":"CHOOSE THIS";
-  } else {
-    voteBtnText = bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
-  }
-  const btnCls = "mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"");
-  const voteBtn=el("button",{class:btnCls},voteBtnText);
-  voteBtn.addEventListener("click",()=>toggleModVote(mod.id));
-
-  const tally=el("div",{class:"mod-vote-tally"+(votes.length>0?" has-votes":"")});
-  if(mod.type!=="hint" && mod.type!=="sabotage"){
-    tally.textContent = `${votes.length}/2 picked this`;
-  }
-
-  card.append(typeBadge,icon,name,desc,voteBtn,tally);
-  return card;
+function syncPickPhase(data, phase){
+  if(S.screen!=="modifiers") return;
+  // Mark tray cards done/active
+  ["visual","gameplay","perks"].forEach(cat=>{
+    const tc=document.getElementById("traycard-"+cat);
+    if(!tc) return;
+    tc.classList.remove("active-phase","done-phase");
+    if(phase==="tray") return;
+    const phaseOrder=["visual","gameplay","perks","countdown"];
+    const phaseIdx=phaseOrder.indexOf(phase);
+    const catIdx=phaseOrder.indexOf(cat);
+    if(catIdx<phaseIdx) revealTrayCard(tc, cat, data);
+    else if(catIdx===phaseIdx) tc.classList.add("active-phase");
+  });
+  if(phase==="visual")  openPickPopup("visual", data);
+  else if(phase==="gameplay") openPickPopup("gameplay", data);
+  else if(phase==="perks")   openPickPopup("perks", data);
+  else if(phase==="countdown") startPickCountdown();
 }
 
 function patchModifiers(data){
-  const sharedPool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
-  const myPerks=pickPerks(S.roomCode, S.username);
-  const fullPool=[...sharedPool, ...myPerks];
-  const players=Object.keys(data.players||{});
-  fullPool.forEach(mod=>{
-    const card=document.getElementById("modcard-"+mod.id);
-    if(!card)return;
-    let myVoted = false;
-    let bothVoted = false;
-    let votes = [];
-    if(mod.type==="hint" || mod.type==="sabotage"){
-      myVoted = data.players?.[S.username]?.perk === mod.id;
-    } else {
-      votes = data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
-      myVoted = votes.includes(S.username);
-      bothVoted = votes.length>=2;
-    }
-    card.className=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted&&mod.type!=="hint"&&mod.type!=="sabotage"?" single-voted":""}${(mod.type==="hint"||mod.type==="sabotage")&&myVoted?" perk-selected":""}`;
-    const voteBtn=card.querySelector(".mod-vote-btn");
-    if(voteBtn){
-      if(mod.type==="hint" || mod.type==="sabotage"){
-        voteBtn.textContent=myVoted?"⚡ CHOSEN PERK":"CHOOSE THIS";
-      } else {
-        voteBtn.textContent=bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
-      }
-      voteBtn.className="mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"");
-    }
-    const tally=card.querySelector(".mod-vote-tally");
-    if(tally && mod.type!=="hint" && mod.type!=="sabotage"){
-      tally.textContent=`${votes.length}/2 picked this`;
-      tally.className="mod-vote-tally"+(votes.length>0?" has-votes":"");
-    }
-  });
+  if(!data) return;
+  const phase = data.pickingPhase||"tray";
+  syncPickPhase(data, phase);
 
-  // Normal votes
-  const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
-  const myNormal=normalVotes.includes(S.username);
-  const nb=document.getElementById("normalbtn");
-  const nc=document.getElementById("normalcount");
-  if(nb){nb.textContent=myNormal?"✓ PLAY NORMAL (you voted)":"PLAY NORMAL";nb.classList.toggle("voted",myNormal);}
-  if(nc)nc.textContent=`${normalVotes.length}/2 voted to skip`;
+  // If a popup is open, also update its vote tallies
+  const overlay = document.getElementById("pickoverlay");
+  if(!overlay) return;
+  const curPhase = overlay.dataset.phase;
+  if(curPhase==="visual"||curPhase==="gameplay"){
+    patchPickVotes(data, curPhase);
+  }
+  if(curPhase==="perks"){
+    patchPerkWaiting(data);
+  }
 }
 
-async function toggleModVote(modId){
-  const data=await fbGet(`/duels/${S.roomCode}`);
-  
-  // Check if it's a perk
-  const perkDef=PERK_MODS.find(m=>m.id===modId);
-  if(perkDef){
-    const existing=data.players?.[S.username]?.perk;
-    if(existing===modId){
-      await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:null});
-    } else {
-      await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:modId});
-      await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:null});
+// ── TRAY CARD FLIP REVEAL ─────────────────────────────────────
+function revealTrayCard(tc, cat, data){
+  tc.classList.add("done-phase","flip-in");
+  tc.addEventListener("animationend",()=>tc.classList.remove("flip-in"),{once:true});
+  tc.innerHTML="";
+  if(cat==="visual"){
+    const id=data.visualPick;
+    const def=id&&id!=="none"?VISUAL_MODS.find(m=>m.id===id):null;
+    tc.append(
+      el("div",{class:"tray-card-icon"},def?def.icon:"❌"),
+      el("div",{class:"tray-card-label"},"VISUAL\nCARDS"),
+      el("div",{class:"tray-card-result-name"},def?def.name:"SKIPPED")
+    );
+  } else if(cat==="gameplay"){
+    const id=data.gameplayPick;
+    const def=id&&id!=="none"?GAMEPLAY_MODS.find(m=>m.id===id):null;
+    tc.append(
+      el("div",{class:"tray-card-icon"},def?def.icon:"❌"),
+      el("div",{class:"tray-card-label"},"GAMEPLAY\nCARDS"),
+      el("div",{class:"tray-card-result-name"},def?def.name:"SKIPPED")
+    );
+  } else if(cat==="perks"){
+    const myPerk=data.players?.[S.username]?.perk;
+    const def=myPerk?PERK_MODS.find(m=>m.id===myPerk):null;
+    tc.append(
+      el("div",{class:"tray-card-icon"},def?def.icon:"⚡"),
+      el("div",{class:"tray-card-label"},"YOUR\nPERK"),
+      el("div",{class:"tray-card-result-name"},def?def.name:"NONE")
+    );
+  }
+}
+
+// ── PHASE POPUP ───────────────────────────────────────────────
+function openPickPopup(phase, data){
+  document.getElementById("pickoverlay")?.remove();
+  const overlay=d("pick-overlay"); overlay.id="pickoverlay"; overlay.dataset.phase=phase;
+
+  if(phase==="perks"){
+    buildPerkPickPopup(overlay, data);
+  } else {
+    buildVotePickPopup(overlay, phase, data);
+  }
+  document.body.append(overlay);
+}
+
+function buildVotePickPopup(overlay, phase, data){
+  const isVisual=phase==="visual";
+  const pool=isVisual?
+    (data.modifierPool||[]).map(id=>VISUAL_MODS.find(m=>m.id===id)).filter(Boolean):
+    (data.modifierPool||[]).map(id=>GAMEPLAY_MODS.find(m=>m.id===id)).filter(Boolean);
+
+  overlay.append(
+    el("div",{class:"pick-overlay-title"},isVisual?"🎨 VISUAL CARD":"🎮 GAMEPLAY CARD"),
+    el("div",{class:"pick-overlay-sub"},"VOTE TOGETHER — FIRST CONSENSUS WINS")
+  );
+
+  const grid=d("pick-popup-grid"); grid.id="pickpopupgrid";
+  pool.forEach(mod=>{
+    const votes=data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
+    const myVoted=votes.includes(S.username);
+    const bothVoted=votes.length>=2;
+    const card=d(`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted?" single-voted":""}`);
+    card.id="modcard-"+mod.id;
+    card.append(
+      el("span",{class:`mod-type-badge ${mod.type}`},mod.type.toUpperCase()),
+      el("span",{class:"mod-icon"},mod.icon),
+      el("div",{class:"mod-name"},mod.name),
+      el("div",{class:"mod-desc"},mod.desc)
+    );
+    const voteBtn=el("button",{class:"mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"")},
+      bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS");
+    voteBtn.addEventListener("click",()=>castPickVote(mod.id, phase));
+    const tally=el("div",{class:"mod-vote-tally"+(votes.length>0?" has-votes":"")},`${votes.length}/2 picked this`);
+    card.append(voteBtn, tally);
+    grid.append(card);
+  });
+  overlay.append(grid);
+
+  // Timer
+  const timerRow=d("pick-timer-row"); timerRow.id="picktimer";
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("class","pick-timer-svg"); svg.setAttribute("viewBox","0 0 40 40");
+  const bg=document.createElementNS("http://www.w3.org/2000/svg","circle"); bg.setAttribute("class","pick-timer-bg"); bg.setAttribute("cx","20"); bg.setAttribute("cy","20"); bg.setAttribute("r","16");
+  const fill=document.createElementNS("http://www.w3.org/2000/svg","circle"); fill.setAttribute("class","pick-timer-fill"); fill.setAttribute("id","ptimerfill"); fill.setAttribute("cx","20"); fill.setAttribute("cy","20"); fill.setAttribute("r","16"); fill.setAttribute("stroke-dasharray","100.53"); fill.setAttribute("stroke-dashoffset","0");
+  svg.append(bg,fill);
+  const txt=el("div",{class:"pick-timer-txt",id:"ptimernum"},"30");
+  const lbl=el("div",{style:"font-size:11px;color:var(--mut);letter-spacing:1px"},"SEC LEFT");
+  timerRow.append(svg,txt,lbl);
+
+  // Normal/skip btn
+  const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
+  const myNormal=normalVotes.includes(S.username);
+  const normBtn=el("button",{class:"pick-normal-btn"+(myNormal?" voted":""),id:"picknormalbtn"},
+    myNormal?"✓ GO NORMAL (voted)":"SKIP — PLAY NORMAL");
+  normBtn.addEventListener("click",()=>castNormalVote(phase));
+
+  overlay.append(timerRow, normBtn);
+  startPickTimer(data, phase);
+}
+
+function patchPickVotes(data, phase){
+  const pool=phase==="visual"?
+    (data.modifierPool||[]).map(id=>VISUAL_MODS.find(m=>m.id===id)).filter(Boolean):
+    (data.modifierPool||[]).map(id=>GAMEPLAY_MODS.find(m=>m.id===id)).filter(Boolean);
+  pool.forEach(mod=>{
+    const card=document.getElementById("modcard-"+mod.id);
+    if(!card) return;
+    const votes=data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
+    const myVoted=votes.includes(S.username);
+    const bothVoted=votes.length>=2;
+    card.className=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted?" single-voted":""}`;
+    const btn=card.querySelector(".mod-vote-btn");
+    if(btn){btn.textContent=bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";btn.className="mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"");}
+    const tally=card.querySelector(".mod-vote-tally");
+    if(tally){tally.textContent=`${votes.length}/2 picked this`;tally.className="mod-vote-tally"+(votes.length>0?" has-votes":"");}
+
+    if(bothVoted) resolvePickPhase(phase, data, mod.id);
+  });
+  const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
+  const myNormal=normalVotes.includes(S.username);
+  const nb=document.getElementById("picknormalbtn");
+  if(nb){nb.textContent=myNormal?"✓ GO NORMAL (voted)":"SKIP — PLAY NORMAL";nb.classList.toggle("voted",myNormal);}
+  if(normalVotes.length>=2) resolvePickPhase(phase, data, "none");
+}
+
+let _resolving=false;
+function resolvePickPhase(phase, data, chosenId){
+  if(_resolving) return; _resolving=true;
+  if(!S.isHost){_resolving=false;return;}
+  clearInterval(pickPhaseTimer);
+  const grid=document.getElementById("pickpopupgrid");
+  if(grid){
+    grid.querySelectorAll(".mod-card").forEach(c=>{
+      if(c.id==="modcard-"+chosenId) c.classList.add("fly-back");
+      else c.classList.add("fade-out");
+    });
+  }
+  setTimeout(async()=>{
+    document.getElementById("pickoverlay")?.remove();
+    const tc=document.getElementById("traycard-"+phase);
+    if(tc) revealTrayCard(tc, phase, {...data,[phase==="visual"?"visualPick":"gameplayPick"]:chosenId});
+    const nextPhase=phase==="visual"?"gameplay":"perks";
+    await fbUpdate(`/duels/${S.roomCode}`,{
+      pickingPhase:nextPhase,
+      [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
+    });
+    _resolving=false;
+  }, 450);
+}
+
+function startPickTimer(data, phase){
+  if(pickPhaseTimer) clearInterval(pickPhaseTimer);
+  const deadline=data.modifierDeadline||Date.now()+30000;
+  pickPhaseTimer=setInterval(async()=>{
+    if(S.screen!=="modifiers"){clearInterval(pickPhaseTimer);return;}
+    const msLeft=deadline-Date.now();
+    const left=Math.max(0,Math.ceil(msLeft/1000));
+    const txt=document.getElementById("ptimernum");
+    if(txt) txt.textContent=left;
+    const fill=document.getElementById("ptimerfill");
+    if(fill) fill.setAttribute("stroke-dashoffset",String(100.53-(Math.max(0,Math.min(1,msLeft/30000))*100.53)));
+    const row=document.getElementById("picktimer");
+    if(row) row.classList.toggle("hurry",left<=5);
+    if(left<=0 && S.isHost){
+      clearInterval(pickPhaseTimer);
+      // Auto-pick highest voted
+      const freshData=await fbGet(`/duels/${S.roomCode}`);
+      const mods=phase==="visual"?
+        (freshData.modifierPool||[]).map(id=>VISUAL_MODS.find(m=>m.id===id)).filter(Boolean):
+        (freshData.modifierPool||[]).map(id=>GAMEPLAY_MODS.find(m=>m.id===id)).filter(Boolean);
+      let best=null, bestCount=-1;
+      mods.forEach(m=>{
+        const cnt=Object.keys(freshData.modifierVotes?.[m.id]||{}).length;
+        if(cnt>bestCount){best=m.id;bestCount=cnt;}
+      });
+      resolvePickPhase(phase, freshData, best||"none");
     }
+  },200);
+}
+
+async function castPickVote(modId, phase){
+  const data=await fbGet(`/duels/${S.roomCode}`);
+  const pool=data.modifierPool||[];
+  // Remove own vote from same-type mods then set this
+  const updates={[`modifierVotes/${modId}/${S.username}`]:true,[`normalVotes/${S.username}`]:null};
+  pool.forEach(pid=>{
+    if(pid===modId) return;
+    if(data.modifierVotes?.[pid]?.[S.username]){
+      const pDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===pid);
+      const tDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===modId);
+      if(pDef&&tDef&&pDef.type===tDef.type) updates[`modifierVotes/${pid}/${S.username}`]=null;
+    }
+  });
+  await fbUpdate(`/duels/${S.roomCode}`,updates);
+  // DebugBot mirrors
+  if(Object.keys(data.players||{}).includes("DebugBot")){
+    setTimeout(async()=>{
+      await fbUpdate(`/duels/${S.roomCode}/modifierVotes/${modId}`,{DebugBot:true});
+    },1500);
+  }
+}
+
+async function castNormalVote(phase){
+  const data=await fbGet(`/duels/${S.roomCode}`);
+  const existing=data.normalVotes?.[S.username];
+  await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:existing?null:true});
+  if(!existing && Object.keys(data.players||{}).includes("DebugBot")){
+    setTimeout(async()=>{
+      await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{DebugBot:true});
+    },1500);
+  }
+}
+
+// ── PERKS POPUP ───────────────────────────────────────────────
+function buildPerkPickPopup(overlay, data){
+  const myPerk=data.players?.[S.username]?.perk;
+  const myPerkReady=!!data.players?.[S.username]?.perkReady;
+
+  overlay.append(
+    el("div",{class:"pick-overlay-title"},"⚡ YOUR PERK"),
+    el("div",{class:"pick-overlay-sub"},"CHOOSE A MYSTERY CARD — YOUR FATE AWAITS")
+  );
+
+  if(myPerkReady){
+    // Already chose, waiting for opponent
+    const def=myPerk?PERK_MODS.find(m=>m.id===myPerk):null;
+    overlay.append(
+      el("div",{class:"pick-waiting-label"},`✓ You got: ${def?def.icon+" "+def.name:"a perk!"}`),
+      el("div",{class:"pick-waiting-label",style:"opacity:0.5"},"⏳ Waiting for opponent...")
+    );
     return;
   }
 
-  const existing=data.modifierVotes?.[modId]?.[S.username];
-  
-  if(existing){
-    await fbUpdate(`/duels/${S.roomCode}/modifierVotes/${modId}`,{[S.username]:null});
+  const grid=d("pick-popup-grid"); grid.id="perkpickgrid";
+  // 3 mystery cards
+  for(let i=0;i<3;i++){
+    const mc=el("div",{class:"mystery-card"});
+    mc.append(
+      el("div",{class:"mystery-card-q"},"🂠"),
+      el("div",{class:"mystery-card-hint"},"TAP TO REVEAL")
+    );
+    mc.addEventListener("click",()=>chooseMysteryCard(mc, grid, data));
+    grid.append(mc);
+  }
+  overlay.append(grid);
+}
+
+async function chooseMysteryCard(mc, grid, data){
+  if(mc.classList.contains("shaking")||mc.classList.contains("revealed")) return;
+  // Disable all cards
+  grid.querySelectorAll(".mystery-card").forEach(c=>c.style.pointerEvents="none");
+  mc.classList.add("shaking");
+  // Compute perk from seeded pool
+  const perks=pickPerks(S.roomCode, S.username);
+  const chosen=perks[Math.floor(Math.random()*perks.length)];
+  await new Promise(r=>setTimeout(r,2800));
+  mc.classList.remove("shaking");
+  mc.innerHTML="";
+  mc.classList.add("revealed");
+  mc.append(
+    el("span",{class:"mod-icon"},chosen.icon),
+    el("div",{class:"mod-name"},chosen.name),
+    el("div",{class:"mod-desc-sm"},chosen.desc)
+  );
+  // Fade unchosen
+  grid.querySelectorAll(".mystery-card:not(.revealed)").forEach(c=>c.classList.add("fade-out"));
+  // Write to Firebase
+  await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:chosen.id,perkReady:true});
+  // Check if both ready
+  const fresh=await fbGet(`/duels/${S.roomCode}`);
+  const players=Object.keys(fresh.players||{});
+  const allReady=players.every(p=>fresh.players[p]?.perkReady);
+  if(allReady && S.isHost){
+    setTimeout(async()=>{
+      await fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
+    },1000);
   } else {
-    // Enforce 1 visual, 1 gameplay max
-    const targetDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===modId);
-    if(targetDef){
-      const pool=data.modifierPool||[];
-      const updates={[`modifierVotes/${modId}/${S.username}`]:true,[`normalVotes/${S.username}`]:null};
-      pool.forEach(pid=>{
-        if(pid===modId) return;
-        if(data.modifierVotes?.[pid]?.[S.username]){
-          const pDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===pid);
-          if(pDef && pDef.type===targetDef.type){
-            updates[`modifierVotes/${pid}/${S.username}`]=null;
-          }
-        }
-      });
-      await fbUpdate(`/duels/${S.roomCode}`, updates);
-    }
+    // Show waiting label
+    setTimeout(()=>{
+      const overlay=document.getElementById("pickoverlay");
+      if(!overlay) return;
+      overlay.innerHTML="";
+      overlay.append(
+        el("div",{class:"pick-overlay-title"},"⚡ PERK LOCKED IN!"),
+        el("div",{class:"pick-waiting-label"},`You got: ${chosen.icon} ${chosen.name}`),
+        el("div",{class:"pick-waiting-label",style:"opacity:0.5"},"⏳ Waiting for opponent...")
+      );
+    },800);
   }
-
-  // Debug bot auto-vote
-  const players = Object.keys(data.players || {});
-  if(players.includes("DebugBot") && !existing){
-    setTimeout(async ()=>{
-      await fbUpdate(`/duels/${S.roomCode}/modifierVotes/${modId}`,{["DebugBot"]:true});
-      await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{["DebugBot"]:null});
-      await evaluateTimerAfterVote();
-    }, 2000);
-  }
-  await evaluateTimerAfterVote();
 }
 
-async function toggleNormalVote(){
-  const data=await fbGet(`/duels/${S.roomCode}`);
-  const existing=data.normalVotes?.[S.username];
-  if(existing){
-    await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:null});
-  } else {
-    await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:true});
-  }
-
-  // Debug bot auto-vote
-  const players = Object.keys(data.players || {});
-  const existing2 = data.normalVotes?.[S.username];
-  if(players.includes("DebugBot") && !existing2){
-    setTimeout(async ()=>{
-      await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{["DebugBot"]:true});
-      await evaluateTimerAfterVote();
-    }, 2000);
-  }
-  await evaluateTimerAfterVote();
-}
-
-async function evaluateTimerAfterVote(){
-  const data=await fbGet(`/duels/${S.roomCode}`);
-  if(!data || data.status!=="modifiers") return;
-  const pool=data.modifierPool||[];
-  let fullCount = 0;
-  pool.forEach(id=>{
-    const votes=data.modifierVotes?.[id]?Object.keys(data.modifierVotes[id]):[];
-    if(votes.length>=2) fullCount++;
-  });
-  const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
-  if(normalVotes.length>=2) fullCount++;
-
-  let newDeadline = Date.now() + 30000;
-  const currentDeadline = data.modifierDeadline || newDeadline;
-  if(fullCount >= 2){
-    newDeadline = Math.min(currentDeadline, Date.now() + 5000);
-  }
-  await fbUpdate(`/duels/${S.roomCode}`, {modifierDeadline: newDeadline});
-}
-
-async function startFromModifiers(){
-  if(!S.isHost)return;
-  const data=await fbGet(`/duels/${S.roomCode}`);
-  const pool=data.modifierPool||[];
-  // Compute which mods both voted for
-  const active=[];
-  pool.forEach(id=>{
-    const votes=data.modifierVotes?.[id]?Object.keys(data.modifierVotes[id]):[];
-    if(votes.length>=2)active.push(id);
-  });
-
+function patchPerkWaiting(data){
   const players=Object.keys(data.players||{});
-  const first=players[Math.floor(Math.random()*players.length)];
+  const allReady=players.every(p=>data.players[p]?.perkReady);
+  if(allReady && S.isHost) fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────────
+function startPickCountdown(){
+  document.getElementById("pickoverlay")?.remove();
+  let n=5;
+  const show=()=>{
+    document.querySelector(".countdown-overlay")?.remove();
+    const ov=d("countdown-overlay");
+    ov.append(
+      el("div",{class:"countdown-num"},n===0?"GO!":String(n)),
+      el("div",{class:"countdown-label"},n===0?"GAME STARTS":"STARTING IN")
+    );
+    document.body.append(ov);
+    if(n<=0){
+      setTimeout(()=>{ov.remove(); if(S.isHost) startFromModifiers();},600);
+      return;
+    }
+    n--; setTimeout(show,1000);
+  };
+  show();
+}
+
+// Kept for compat — host calls this to actually start game
+async function startFromModifiers(){
+
+// Kept for compat — called by host after countdown
+async function startFromModifiers(){
+  if(!S.isHost) return;
+  const data = await fbGet(`/duels/${S.roomCode}`);
+  const players = Object.keys(data.players||{});
+  const first = players[Math.floor(Math.random()*players.length)];
+
+  // Collect active mods from the sequential picks
+  const active = [];
+  if(data.visualPick && data.visualPick !== "none") active.push(data.visualPick);
+  if(data.gameplayPick && data.gameplayPick !== "none") active.push(data.gameplayPick);
 
   // Build peek ranges if peek active
-  let peekRanges=null;
+  let peekRanges = null;
   if(active.includes("peek")){
-    peekRanges={};
+    peekRanges = {};
     players.forEach(p=>{
-      const num=data.players[p].number;
-      const opp=players.find(q=>q!==p);
-      const oppNum=data.players[opp].number;
-      peekRanges[p]=buildPeekRanges(oppNum,data.min,data.max);
+      const opp = players.find(q=>q!==p);
+      const oppNum = data.players[opp].number;
+      peekRanges[p] = buildPeekRanges(oppNum, data.min, data.max);
     });
   }
 
-  const telepathyMode=active.includes("telepathy");
+  const telepathyMode = active.includes("telepathy");
 
   await fbUpdate(`/duels/${S.roomCode}`,{
     status:"playing",
-    turn:telepathyMode?null:first,
-    guesses:null,taunts:null,reactions:null,typing:null,
-    activeModifiers:active.length>0?active.reduce((acc,id,i)=>{acc[i]=id;return acc;},{}):{},
-    peekRanges:peekRanges||null
+    turn: telepathyMode?null:first,
+    guesses:null, taunts:null, reactions:null, typing:null,
+    activeModifiers: active.length>0 ? active.reduce((acc,id,i)=>{acc[i]=id;return acc;},{}) : {},
+    peekRanges: peekRanges||null,
+    pickingPhase: null,
+    visualPick: null,
+    gameplayPick: null,
+    normalVotes: null,
+    modifierVotes: null,
   });
 }
+
 
 function buildPeekRanges(target, min, max){
   // 3 ranges: 2 wrong, 1 correct. Range width ~10% of total range
