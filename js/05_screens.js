@@ -271,8 +271,12 @@ function renderModifiers(){
 
   const grid=d("mod-grid");
   grid.id="modgrid";
-  pool.forEach(mod=>{
-    grid.append(buildModCard(mod,data,players));
+  pool.forEach((mod,idx)=>{
+    const card = buildModCard(mod,data,players);
+    card.style.opacity="0";
+    card.style.animation=`modSlideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`;
+    card.style.animationDelay=`${idx * 0.08}s`;
+    grid.append(card);
   });
   screen.append(grid);
 
@@ -284,10 +288,29 @@ function renderModifiers(){
   normalBtn.classList.toggle("voted",myNormal);
   normalBtn.addEventListener("click",toggleNormalVote);
 
-  // Host start button & Timer
+  // Host start button & Circular Timer
   const startArea=d("",normalBtn,normalCount);
-  const timerDisplay = el("div",{class:"mod-timer",id:"modtimer"},"Starting in 30s...");
-  startArea.append(timerDisplay);
+  
+  const timerWrap = d("mod-timer-wrap");
+  timerWrap.id="modtimerwrap";
+  const timerSvg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+  timerSvg.setAttribute("class","mod-timer-svg");
+  timerSvg.setAttribute("viewBox","0 0 40 40");
+  const bgCirc = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  bgCirc.setAttribute("class","mod-timer-bg");
+  bgCirc.setAttribute("cx","20"); bgCirc.setAttribute("cy","20"); bgCirc.setAttribute("r","16");
+  const fillCirc = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  fillCirc.setAttribute("class","mod-timer-fill");
+  fillCirc.setAttribute("id","modtimerfill");
+  fillCirc.setAttribute("cx","20"); fillCirc.setAttribute("cy","20"); fillCirc.setAttribute("r","16");
+  fillCirc.setAttribute("stroke-dasharray","100.53"); // 2 * PI * 16 = 100.53
+  fillCirc.setAttribute("stroke-dashoffset","0");
+  timerSvg.append(bgCirc,fillCirc);
+  
+  const timerText = el("div",{class:"mod-timer-text",id:"modtimertext"},"30");
+  timerWrap.append(timerSvg, timerText);
+
+  startArea.append(timerWrap);
   screen.append(startArea);
 
   if(modifierTimerInterval) clearInterval(modifierTimerInterval);
@@ -295,15 +318,31 @@ function renderModifiers(){
     if(S.screen !== "modifiers") return clearInterval(modifierTimerInterval);
     const deadline = S.roomData?.modifierDeadline;
     if(!deadline) return;
-    const left = Math.max(0, Math.ceil((deadline - Date.now())/1000));
-    const td = document.getElementById("modtimer");
-    if(td) td.textContent = `Starting in ${left}s...`;
+    const msLeft = deadline - Date.now();
+    const left = Math.max(0, Math.ceil(msLeft/1000));
+    
+    const txt = document.getElementById("modtimertext");
+    if(txt) txt.textContent = left;
+    
+    const fill = document.getElementById("modtimerfill");
+    if(fill){
+      // Max time is 30s. If deadline was shortened to 5s, the ratio is based on the 30s max to show a jump, 
+      // but here let's just make it visually drain over 30s.
+      const pct = Math.max(0, Math.min(1, msLeft / 30000));
+      const offset = 100.53 - (pct * 100.53);
+      fill.setAttribute("stroke-dashoffset", offset);
+    }
+    
+    const wrap = document.getElementById("modtimerwrap");
+    if(wrap){
+      wrap.classList.toggle("hurry", left <= 5);
+    }
     
     if(left <= 0 && S.isHost){
       clearInterval(modifierTimerInterval);
       startFromModifiers();
     }
-  }, 200);
+  }, 100);
 
   return screen;
 }
@@ -366,12 +405,26 @@ function patchModifiers(data){
 async function toggleModVote(modId){
   const data=await fbGet(`/duels/${S.roomCode}`);
   const existing=data.modifierVotes?.[modId]?.[S.username];
+  
   if(existing){
     await fbUpdate(`/duels/${S.roomCode}/modifierVotes/${modId}`,{[S.username]:null});
   } else {
-    await fbUpdate(`/duels/${S.roomCode}/modifierVotes/${modId}`,{[S.username]:true});
-    // Remove normal vote if switching to mod
-    await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:null});
+    // Enforce 1 visual, 1 gameplay max
+    const targetDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===modId);
+    if(targetDef){
+      const pool=data.modifierPool||[];
+      const updates={[`modifierVotes/${modId}/${S.username}`]:true,[`normalVotes/${S.username}`]:null};
+      pool.forEach(pid=>{
+        if(pid===modId) return;
+        if(data.modifierVotes?.[pid]?.[S.username]){
+          const pDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===pid);
+          if(pDef && pDef.type===targetDef.type){
+            updates[`modifierVotes/${pid}/${S.username}`]=null;
+          }
+        }
+      });
+      await fbUpdate(`/duels/${S.roomCode}`, updates);
+    }
   }
 
   // Debug bot auto-vote
@@ -563,6 +616,29 @@ function renderGame(){
     screen.append(peekBtn);
   }
 
+  // Comeback mechanic
+  const oppScore=data.players?.[opp]?.score||0;
+  const myScore=data.players?.[me]?.score||0;
+  if(oppScore - myScore >= 2 && !hasUsedComeback && myTurn){
+    const cbBtn=el("button",{class:"peek-action-btn",style:"border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,0.15)"},"🎁 COMEBACK: HALVE THE RANGE (50/50)");
+    cbBtn.addEventListener("click",async ()=>{
+      if(hasUsedComeback)return;
+      hasUsedComeback=true;
+      cbBtn.textContent="🎁 COMEBACK USED";
+      cbBtn.classList.add("used");
+      const {lo,hi}=computeRange(data,me,opp,false);
+      const mid=Math.floor((lo+hi)/2);
+      const target=data.players[opp].number;
+      let res="correct";
+      if(mid<target) res="higher"; else if(mid>target) res="lower";
+      if(res!=="correct"){
+        await fbPush(`/duels/${S.roomCode}/guesses`,{player:me,guess:mid,result:res,ts:Date.now()});
+        if(!telepathy)await fbUpdate(`/duels/${S.roomCode}`,{turn:opp});
+      }
+    });
+    screen.append(cbBtn);
+  }
+
   // Duel panels
   const blind=hasMod(data,"blind");
   const scrambledForBar=hasMod(data,"scrambled");
@@ -745,6 +821,16 @@ function renderGuessCard(gc,data,me,opp,myTurn){
     gc.append(el("div",{class:"waiting-label"},"Opponent's turn — sit tight... 💭"));
   }
 }
+
+// Global Enter key hook
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && S.screen === "game") {
+    // If not in chat input
+    if (document.activeElement && document.activeElement.id === "ci") return;
+    const gbtn = document.getElementById("gbtn");
+    if (gbtn && !gbtn.disabled) submitGuess();
+  }
+});
 
 async function broadcastTyping(isTyping){
   if(isTyping===lastTypingState)return;
@@ -931,12 +1017,21 @@ async function submitGuess(){
   if(isNaN(guess)||guess<validLo||guess>validHi){
     SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);return;
   }
+
+  // Local Guard to prevent double guesses bypassing Firebase
+  if(!window._localGuesses) window._localGuesses = new Set();
+  if(window._localGuesses.has(guess)){
+    gi.value=""; toast("⚠ already guessed that"); return;
+  }
+
   if(myPast.includes(guess)){
     SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);
     const existing=document.getElementById("dup-msg");
     if(!existing){const msg=el("div",{id:"dup-msg",style:"font-size:10px;color:var(--red);text-align:center;margin-top:4px;letter-spacing:1px"},`already tried ${guess}!`);input.parentNode.parentNode.append(msg);setTimeout(()=>msg.remove(),1800);}
     return;
   }
+
+  window._localGuesses.add(guess);
 
   if(cupid)triggerCupidArrow();
   if(glitter){const r=input.getBoundingClientRect();triggerGlitter(r.left+r.width/2,r.top);}
@@ -992,11 +1087,12 @@ async function submitGuess(){
     if(gbtn)gbtn.disabled=true;
     if(cdLabel){cdLabel.textContent="⏳ 3s cooldown...";cdLabel.classList.add("active");}
     let secs=3;
-    const cdInterval=setInterval(()=>{
+    if(window.telepathyCdTimer) clearInterval(window.telepathyCdTimer);
+    window.telepathyCdTimer=setInterval(()=>{
       secs--;
       const cl=document.getElementById("telecd");
       if(cl)cl.textContent=secs>0?`⏳ ${secs}s...`:"both guessing simultaneously 🫶";
-      if(secs<=0){clearInterval(cdInterval);telepathyCooldown=false;const gb=document.getElementById("gbtn");if(gb)gb.disabled=false;const cdl=document.getElementById("telecd");if(cdl)cdl.classList.remove("active");}
+      if(secs<=0){clearInterval(window.telepathyCdTimer);telepathyCooldown=false;const gb=document.getElementById("gbtn");if(gb)gb.disabled=false;const cdl=document.getElementById("telecd");if(cdl)cdl.classList.remove("active");}
     },1000);
   }
 
@@ -1145,6 +1241,7 @@ async function nextRound(){
   const playerReset={};
   players.forEach(p=>{playerReset[`players/${p}/number`]=null;playerReset[`players/${p}/ready`]=false;});
   lastReactionCount=0;lastTypingState=false;lastChatCount=0;lastGuessInfo=null;hasUsedComeback=false;
+  if(window._localGuesses) window._localGuesses.clear();
   const newPool=pickModifiers(S.roomCode+(S.round+1)).map(m=>m.id);
   await fbUpdate(`/duels/${S.roomCode}`,{
     status:"picking",winner:null,winnerStreak:null,luckyShot:null,guesses:null,turn:null,
@@ -1166,6 +1263,7 @@ async function leaveRoom(){
   }
   Object.assign(S,{screen:"home",roomCode:"",isHost:false,roomData:null,round:1,bestOf:null});
   lastReactionCount=0;lastTypingState=false;roundHistory=[];lastChatCount=0;lastGuessInfo=null;hasUsedComeback=false;
+  if(window._localGuesses) window._localGuesses.clear();
   removeVisualMods();render();
 }
 

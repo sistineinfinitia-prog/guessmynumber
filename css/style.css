@@ -241,8 +241,28 @@ input::placeholder { color: var(--mut); }
 .mod-normal-btn:hover { border-color: var(--txt); color: var(--txt); }
 .mod-normal-count { font-size: 9px; color: var(--mut); margin-top: 3px; letter-spacing: 1px; }
 
-.mod-timer {
-  text-align: center; font-family: 'Bebas Neue', Impact, sans-serif; font-size: 18px; letter-spacing: 2px; color: var(--acc); margin-top: 10px; animation: pulse 1.2s infinite;
+.mod-timer-wrap {
+  display:flex; align-items:center; justify-content:center; gap:12px; margin-top:14px;
+}
+.mod-timer-svg {
+  width:40px; height:40px; transform:rotate(-90deg); overflow:visible;
+}
+.mod-timer-bg {
+  fill:none; stroke:var(--sur2); stroke-width:4;
+}
+.mod-timer-fill {
+  fill:none; stroke:var(--acc); stroke-width:4;
+  stroke-linecap:round; transition:stroke-dashoffset 0.2s linear, stroke 0.3s;
+}
+.mod-timer-text {
+  font-family:'Bebas Neue',Impact,sans-serif; font-size:20px; letter-spacing:2px; color:var(--acc); transition:color 0.3s;
+}
+.mod-timer-wrap.hurry .mod-timer-fill { stroke:var(--red); }
+.mod-timer-wrap.hurry .mod-timer-text { color:var(--red); animation:pulse 0.5s infinite; }
+
+@keyframes modSlideUp {
+  0% { opacity:0; transform:translateY(20px) scale(0.95); }
+  100% { opacity:1; transform:translateY(0) scale(1); }
 }
 
 /* Active modifiers display strip */
