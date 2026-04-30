@@ -290,6 +290,7 @@ function renderModifiers(){
       el("div",{class:"tray-card-sublabel"},cat.sub)
     );
     card.style.opacity="0";
+    card.dataset.slideDir = dirs[i];
     setTimeout(()=>{
       card.style.opacity="1";
       card.classList.add("slide-"+dirs[i]);
@@ -316,12 +317,14 @@ function syncPickPhase(data, phase){
   ["visual","gameplay","perks"].forEach(cat=>{
     const tc=document.getElementById("traycard-"+cat);
     if(!tc) return;
+    // Never touch done-phase cards
+    if(tc.classList.contains("done-phase")) return;
     tc.classList.remove("active-phase");
     if(phase==="tray") return;
     const phaseOrder=["visual","gameplay","perks","countdown"];
     const phaseIdx=phaseOrder.indexOf(phase);
     const catIdx=phaseOrder.indexOf(cat);
-    if(catIdx<phaseIdx && !tc.classList.contains("flip-in") && !tc.classList.contains("done-phase")) {
+    if(catIdx<phaseIdx) {
       revealTrayCard(tc, cat, data);
     }
     else if(catIdx===phaseIdx) tc.classList.add("active-phase");
@@ -330,13 +333,10 @@ function syncPickPhase(data, phase){
   const existingOverlay = document.getElementById("pickoverlay");
   const isCorrectPhaseOpen = existingOverlay && existingOverlay.dataset.phase === phase;
   
-  const tcCurrent = document.getElementById("traycard-"+phase);
-  const isResolved = tcCurrent && (tcCurrent.classList.contains("done-phase") || tcCurrent.classList.contains("flip-in") || _resolving);
-
-  if(phase==="visual" && !isCorrectPhaseOpen && !isResolved)  openPickPopup("visual", data);
-  else if(phase==="gameplay" && !isCorrectPhaseOpen && !isResolved) openPickPopup("gameplay", data);
-  else if(phase==="perks" && !isCorrectPhaseOpen && !isResolved)   openPickPopup("perks", data);
-  else if(phase==="countdown" && !document.querySelector(".countdown-overlay")) startPickCountdown();
+  if(phase==="visual" && !isCorrectPhaseOpen && !_resolving)  openPickPopup("visual", data);
+  else if(phase==="gameplay" && !isCorrectPhaseOpen && !_resolving) openPickPopup("gameplay", data);
+  else if(phase==="perks" && !isCorrectPhaseOpen && !_resolving)   openPickPopup("perks", data);
+  else if(phase==="countdown" && !_pickCountdownActive) startPickCountdown();
 }
 
 function patchModifiers(data){
@@ -358,6 +358,8 @@ function patchModifiers(data){
 
 // ── TRAY CARD FLIP REVEAL ─────────────────────────────────────
 function revealTrayCard(tc, cat, data){
+  // Remove slide animation classes so they don't replay
+  tc.classList.remove("slide-left","slide-right");
   tc.classList.add("done-phase","flip-in");
   tc.addEventListener("animationend",()=>tc.classList.remove("flip-in"),{once:true});
   tc.innerHTML="";
@@ -452,6 +454,10 @@ function buildVotePickPopup(overlay, phase, data){
   normBtn.addEventListener("click",()=>castNormalVote(phase));
 
   overlay.append(timerRow, normBtn);
+  // Reset timer for this new phase
+  if(S.isHost) {
+    fbUpdate(`/duels/${S.roomCode}`, {modifierDeadline: Date.now() + 30000});
+  }
   startPickTimer(data, phase);
 }
 
@@ -656,10 +662,13 @@ async function chooseMysteryCard(mc, grid, data){
   }
 }
 
+let _perkCountdownQueued = false;
 function patchPerkWaiting(data){
+  if(_perkCountdownQueued) return;
   const players=Object.keys(data.players||{});
   const allReady=players.every(p=>data.players[p]?.perkReady);
   if(allReady && S.isHost && data.pickingPhase !== "countdown") {
+    _perkCountdownQueued = true;
     setTimeout(()=>{
       fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
     }, 2000);
@@ -1039,7 +1048,7 @@ function renderGuessCard(gc,data,me,opp,myTurn){
   if(myPerk){
     const pDef=PERK_MODS.find(m=>m.id===myPerk);
     if(pDef){
-      const perkBtn=el("button",{class:"perk-action-btn",id:"perkbtn"},perkUsed?"⚡ PERK USED":`⚡ USE ${pDef.name.toUpperCase()}`);
+      const perkBtn=el("button",{class:"perk-action-btn",id:"perkbtn",title:pDef.desc},perkUsed?"⚡ PERK USED":`⚡ USE ${pDef.name.toUpperCase()}`);
       if(perkUsed) perkBtn.disabled=true;
       else perkBtn.addEventListener("click",()=>triggerPerk(myPerk));
       gc.append(perkBtn);

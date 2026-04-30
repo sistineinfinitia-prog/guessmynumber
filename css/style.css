@@ -776,9 +776,20 @@ body.mod-heartbeat .gcard { animation: heartbeatPulse 1.5s ease-in-out infinite;
   background: rgba(245, 203, 92, 0.1); color: #f5cb5c;
   box-shadow: 0 0 15px rgba(245, 203, 92, 0.1);
   animation: perkPulseBtn 2s infinite;
+  position: relative;
 }
 .perk-action-btn:hover { background: rgba(245, 203, 92, 0.2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245, 203, 92, 0.25); }
+.perk-action-btn:hover::after {
+  content: attr(title); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: rgba(15,5,8,0.95); border: 1px solid rgba(245,203,92,0.4); border-radius: 8px;
+  padding: 8px 12px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.7); white-space: normal; width: max-content; max-width: 260px;
+  text-align: center; z-index: 100; pointer-events: none; line-height: 1.4;
+  animation: tooltipFade 0.2s ease;
+}
+@keyframes tooltipFade { from{opacity:0;transform:translateX(-50%) translateY(4px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 .perk-action-btn:disabled { opacity: 0.3 !important; cursor: not-allowed; animation: none !important; filter: grayscale(1); }
+.perk-action-btn:disabled:hover::after { display: none; }
 @keyframes perkPulseBtn { 0%,100%{box-shadow:0 0 5px rgba(245, 203, 92, 0.2)} 50%{box-shadow:0 0 20px rgba(245, 203, 92, 0.4)} }
 
 /* ── GLOBAL PERK POPUP ── */
