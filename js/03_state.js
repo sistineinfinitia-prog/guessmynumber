@@ -63,7 +63,7 @@ const PERK_MODS = [
   { id:"doubletap", icon:"🔫", name:"Double Tap", type:"hint",
     desc:"When activated, grants you two back-to-back guesses in a single turn.",
     eventDesc:"🔫 [PLAYER] USED DOUBLE TAP: They stole an extra turn!" },
-  { id:"screencrack", icon:"💥", name:"Screen Crack", type:"sabotage",
-    desc:"Shatters the opponent's screen and instantly skips their current turn.",
-    eventDesc:"💥 [PLAYER] ACTIVATED SCREEN CRACK: Opponent's turn is skipped!" }
+  { id:"thief", icon:"🥷", name:"Thief", type:"sabotage",
+    desc:"Instantly skips the opponent's current turn and steals it.",
+    eventDesc:"🥷 [PLAYER] ACTIVATED THIEF: Opponent's turn is stolen!" }
 ];

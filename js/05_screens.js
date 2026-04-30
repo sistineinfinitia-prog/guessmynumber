@@ -896,7 +896,7 @@ async function triggerPerk(perkId){
   const myTurn = data.turn === me;
   const telepathy = hasMod(data, "telepathy");
   
-  if (perkId === "screencrack" && myTurn && !telepathy) {
+  if (perkId === "thief" && myTurn && !telepathy) {
     const btn = document.getElementById("perkbtn");
     if(btn){
       const old = btn.textContent;
@@ -927,7 +927,7 @@ async function triggerPerk(perkId){
     activeEvent: { perk: perkId, player: me, ts: Date.now(), msg: msg }
   };
 
-  if (perkId === "screencrack") {
+  if (perkId === "thief") {
     if(!telepathy) updates.turn = me;
   } else if (perkId === "oracle") {
     const oppNum = data.players[opp].number;
@@ -984,7 +984,7 @@ function patchGame(data){
     if(soundEnabled && window.SFX) SFX.click();
     setTimeout(()=>popup.remove(), 4000);
     
-    if (data.activeEvent.perk === "screencrack" && data.activeEvent.player !== me) {
+    if (data.activeEvent.perk === "thief" && data.activeEvent.player !== me) {
       if(soundEnabled && window.SFX) SFX.blocked();
       document.body.classList.add("bw-pulsing");
     }
