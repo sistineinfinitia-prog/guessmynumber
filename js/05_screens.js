@@ -300,7 +300,12 @@ function renderModifiers(){
 
   // Restore existing state if rejoining mid-pick
   const phase = data.pickingPhase||"tray";
-  setTimeout(()=>{ syncPickPhase(data, phase); }, 1100);
+  setTimeout(()=>{ 
+    syncPickPhase(data, phase); 
+    if(phase === "tray" && S.isHost) {
+      fbUpdate(`/duels/${S.roomCode}`, {pickingPhase: "visual"});
+    }
+  }, 1100);
 
   return screen;
 }
