@@ -986,9 +986,12 @@ function patchGame(data){
     
     if (data.activeEvent.perk === "screencrack" && data.activeEvent.player !== me) {
       if(soundEnabled && window.SFX) SFX.blocked();
-      const crack = el("div", {class:"screen-crack crack-active"});
-      document.body.append(crack);
+      document.body.classList.add("bw-pulsing");
     }
+  }
+
+  if (myTurn) {
+    document.body.classList.remove("bw-pulsing");
   }
 
   const mypt=document.getElementById("mypturn"),oppt=document.getElementById("oppturn");

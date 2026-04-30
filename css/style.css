@@ -654,17 +654,13 @@ body.mod-heartbeat .gcard { animation: heartbeatPulse 1.5s ease-in-out infinite;
 .gpp-title { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; color: #f5cb5c; letter-spacing: 2px; margin-bottom: 2px; }
 .gpp-desc { font-size: 11px; color: var(--mut); letter-spacing: 1px; text-transform: uppercase; }
 
-/* ── SCREEN CRACK VFX ── */
-.screen-crack {
-  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 500 500' preserveAspectRatio='none'%3E%3Cpath d='M250,250 L10,10 M250,250 L480,40 M250,250 L490,490 M250,250 L30,480 M150,150 L10,200 M350,180 L490,250 M320,380 L450,490 M180,350 L10,400 M250,250 L100,10 M250,250 L400,10 M250,250 L400,490 M250,250 L100,490 M250,250 L200,0 M250,250 L500,200 M250,250 L200,500 M250,250 L0,200' stroke='rgba(255,255,255,0.7)' stroke-width='3' fill='none'/%3E%3Ccircle cx='250' cy='250' r='10' fill='rgba(255,255,255,0.9)'/%3E%3Ccircle cx='250' cy='250' r='30' stroke='rgba(255,255,255,0.5)' stroke-width='2' fill='none'/%3E%3Ccircle cx='250' cy='250' r='70' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none'/%3E%3Cpath d='M230,230 L160,160 M270,230 L340,160 M270,270 L340,340 M230,270 L160,340 M220,250 L150,250 M280,250 L350,250 M250,220 L250,150 M250,280 L250,350' stroke='rgba(255,255,255,0.5)' stroke-width='2' fill='none'/%3E%3Cpath d='M200,200 L50,150 M300,200 L450,150 M300,300 L450,350 M200,300 L50,350 M250,200 L150,50 M250,300 L150,450 M250,200 L350,50 M250,300 L350,450' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-  background-size: 150% 150%; background-position: center; opacity: 0; mix-blend-mode: screen;
+/* ── B&W SABOTAGE VFX ── */
+body.bw-pulsing {
+  animation: bwPulse 1.5s infinite alternate;
 }
-.crack-active { animation: crackImpact 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-@keyframes crackImpact { 
-  0% { opacity:0; transform: scale(1.5) rotate(5deg); }
-  20% { opacity:1; transform: scale(0.95) rotate(-2deg); }
-  100% { opacity:0.85; transform: scale(1) rotate(0); }
+@keyframes bwPulse {
+  0% { filter: grayscale(100%) brightness(0.8) contrast(1.2); }
+  100% { filter: grayscale(100%) brightness(2) contrast(1.5); }
 }
 
 @media (max-width: 500px) {
