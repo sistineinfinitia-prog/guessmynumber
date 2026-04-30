@@ -623,19 +623,17 @@ function renderGame(){
   const myScore=data.players?.[me]?.score||0;
   if(oppScore - myScore >= 2 && !hasUsedComeback && myTurn){
     const cbBtn=el("button",{class:"peek-action-btn",style:"border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,0.15)"},"🎁 COMEBACK: HALVE THE RANGE (50/50)");
-    cbBtn.addEventListener("click",async ()=>{
+    cbBtn.addEventListener("click",()=>{
       if(hasUsedComeback)return;
       hasUsedComeback=true;
       cbBtn.textContent="🎁 COMEBACK USED";
       cbBtn.classList.add("used");
       const {lo,hi}=computeRange(data,me,opp,false);
       const mid=Math.floor((lo+hi)/2);
-      const target=data.players[opp].number;
-      let res="correct";
-      if(mid<target) res="higher"; else if(mid>target) res="lower";
-      if(res!=="correct"){
-        await fbPush(`/duels/${S.roomCode}/guesses`,{player:me,guess:mid,result:res,ts:Date.now()});
-        if(!telepathy)await fbUpdate(`/duels/${S.roomCode}`,{turn:opp});
+      const input=document.getElementById("gi");
+      if(input){
+        input.value=String(mid);
+        submitGuess();
       }
     });
     screen.append(cbBtn);
@@ -986,8 +984,8 @@ function computeRange(data, guesser, target, scrambled=false){
   guesses.filter(g=>g.player===guesser).forEach(g=>{
     // Scrambled: swap higher/lower interpretation
     const trueResult=scrambled?(g.result==="higher"?"lower":g.result==="lower"?"higher":g.result):g.result;
-    if(trueResult==="higher"&&g.guess>lo)lo=g.guess+1;
-    if(trueResult==="lower"&&g.guess<hi)hi=g.guess-1;
+    if(trueResult==="higher"&&g.guess>=lo)lo=g.guess+1;
+    if(trueResult==="lower"&&g.guess<=hi)hi=g.guess-1;
   });
   return{lo:Math.max(data.min||1,lo),hi:Math.min(data.max||100,hi)};
 }
@@ -1166,9 +1164,19 @@ function renderWinner(){
   const isSeriesOver=!!seriesWinner;
 
   if(isSeriesOver){
-    screen.append(d("gh",el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},"SERIES OVER"),el("div",{class:"winner-name",style:"color:var(--acc)"},seriesWinner===me?"YOU WON THE SERIES!":`${seriesWinner.toUpperCase()} WON THE SERIES!`)));
+    const headerWrapper=d("winner-header-wrap"); headerWrapper.style.textAlign="center"; headerWrapper.style.marginBottom="24px";
+    headerWrapper.append(
+      el("div",{class:"logo",style:"font-size:38px;letter-spacing:5px;line-height:1;margin-bottom:8px;color:var(--acc)"},seriesWinner===me?"YOU WON THE SERIES!":`${seriesWinner.toUpperCase()} WON!`),
+      el("div",{style:"font-family:'DM Mono',monospace;font-size:12px;letter-spacing:4px;color:var(--mut);text-transform:uppercase"},"SERIES OVER")
+    );
+    screen.append(headerWrapper);
   } else {
-    screen.append(d("gh",el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},isMe?"YOU WIN!":"YOU LOSE..."),el("div",{class:"winner-name",style:"color:"+(isMe?"var(--acc)":"var(--mut)")},isMe?"VICTORY 💕":winner.toUpperCase()+" WINS")));
+    const headerWrapper=d("winner-header-wrap"); headerWrapper.style.textAlign="center"; headerWrapper.style.marginBottom="24px";
+    headerWrapper.append(
+      el("div",{class:"logo",style:"font-size:46px;letter-spacing:6px;line-height:1;margin-bottom:8px;color:"+(isMe?"var(--acc)":"var(--mut)")},isMe?"VICTORY 💕":winner.toUpperCase()+" WINS"),
+      el("div",{style:"font-family:'DM Mono',monospace;font-size:12px;letter-spacing:4px;color:var(--mut);text-transform:uppercase"},isMe?"YOU WIN!":"YOU LOSE...")
+    );
+    screen.append(headerWrapper);
   }
 
   if(data.luckyShot&&isMe){
