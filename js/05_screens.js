@@ -304,7 +304,7 @@ function renderModifiers(){
   setTimeout(()=>{ 
     syncPickPhase(data, phase); 
     if(phase === "tray" && S.isHost) {
-      fbUpdate(`/duels/${S.roomCode}`, {pickingPhase: "visual"});
+      fbUpdate(`/duels/${S.roomCode}`, {pickingPhase: "visual", modifierDeadline: Date.now() + 30000});
     }
   }, 1100);
 
@@ -454,10 +454,6 @@ function buildVotePickPopup(overlay, phase, data){
   normBtn.addEventListener("click",()=>castNormalVote(phase));
 
   overlay.append(timerRow, normBtn);
-  // Reset timer for this new phase
-  if(S.isHost) {
-    fbUpdate(`/duels/${S.roomCode}`, {modifierDeadline: Date.now() + 30000});
-  }
   startPickTimer(data, phase);
 }
 
@@ -511,12 +507,13 @@ function resolvePickPhase(phase, data, chosenId){
       setTimeout(async () => {
         await fbUpdate(`/duels/${S.roomCode}`,{
           pickingPhase:nextPhase,
-          [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
+          [phase==="visual"?"visualPick":"gameplayPick"]:chosenId,
+          modifierDeadline: Date.now() + 30000
         });
         _resolving=false;
-      }, 5000); // 5s transition
+      }, 3500); // 3.5s transition
     } else {
-      setTimeout(()=>{ _resolving=false; }, 5000);
+      setTimeout(()=>{ _resolving=false; }, 3500);
     }
   }, 450);
 }
