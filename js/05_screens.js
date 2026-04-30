@@ -659,9 +659,6 @@ function startPickCountdown(){
   show();
 }
 
-// Kept for compat — host calls this to actually start game
-async function startFromModifiers(){
-
 // Kept for compat — called by host after countdown
 async function startFromModifiers(){
   if(!S.isHost) return;
