@@ -288,11 +288,13 @@ input::placeholder { color: var(--mut); }
 
 /* Skip/normal button */
 .pick-normal-btn {
-  padding: 9px 24px; font-family:'Bebas Neue',Impact,sans-serif; font-size:14px; letter-spacing:2px;
-  border: 1px solid var(--brd); background: transparent; color: var(--mut); border-radius: 8px; cursor: pointer; transition: all .15s;
+  padding: 12px 32px; font-family:'Bebas Neue',Impact,sans-serif; font-size:16px; letter-spacing:2px;
+  border: 2px solid var(--brd); background: rgba(255,107,157,0.05); color: var(--mut); border-radius: 8px; cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center; width: 100%; max-width: 300px;
 }
-.pick-normal-btn:hover { border-color: var(--txt); color: var(--txt); }
-.pick-normal-btn.voted { border-color: var(--acc); color: var(--acc); background: rgba(255,107,157,0.08); }
+.pick-normal-btn:hover { border-color: var(--txt); color: var(--txt); background: rgba(255,107,157,0.1); }
+.pick-normal-btn.voted { border-color: var(--acc); color: var(--acc); background: rgba(255,107,157,0.15); box-shadow: 0 0 15px rgba(255,107,157,0.2); }
+.norm-tally { font-family: 'DM Mono', monospace; font-size: 14px; opacity: 0.6; margin-left: 10px; font-weight: bold; }
 
 /* Waiting label inside popup */
 .pick-waiting-label { font-size:11px; color:var(--mut); letter-spacing:2px; text-align:center; padding:8px; }

@@ -330,9 +330,12 @@ function syncPickPhase(data, phase){
   const existingOverlay = document.getElementById("pickoverlay");
   const isCorrectPhaseOpen = existingOverlay && existingOverlay.dataset.phase === phase;
   
-  if(phase==="visual" && !isCorrectPhaseOpen)  openPickPopup("visual", data);
-  else if(phase==="gameplay" && !isCorrectPhaseOpen) openPickPopup("gameplay", data);
-  else if(phase==="perks" && !isCorrectPhaseOpen)   openPickPopup("perks", data);
+  const tcCurrent = document.getElementById("traycard-"+phase);
+  const isResolved = tcCurrent && (tcCurrent.classList.contains("done-phase") || tcCurrent.classList.contains("flip-in") || _resolving);
+
+  if(phase==="visual" && !isCorrectPhaseOpen && !isResolved)  openPickPopup("visual", data);
+  else if(phase==="gameplay" && !isCorrectPhaseOpen && !isResolved) openPickPopup("gameplay", data);
+  else if(phase==="perks" && !isCorrectPhaseOpen && !isResolved)   openPickPopup("perks", data);
   else if(phase==="countdown" && !document.querySelector(".countdown-overlay")) startPickCountdown();
 }
 
@@ -444,8 +447,8 @@ function buildVotePickPopup(overlay, phase, data){
   // Normal/skip btn
   const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
   const myNormal=normalVotes.includes(S.username);
-  const normBtn=el("button",{class:"pick-normal-btn"+(myNormal?" voted":""),id:"picknormalbtn"},
-    myNormal?"✓ GO NORMAL (voted)":"SKIP — PLAY NORMAL");
+  const normBtn=el("button",{class:"pick-normal-btn"+(myNormal?" voted":""),id:"picknormalbtn"});
+  normBtn.innerHTML = (myNormal?"✓ GO NORMAL":"SKIP — PLAY NORMAL") + ` <span class="norm-tally">${normalVotes.length}/2</span>`;
   normBtn.addEventListener("click",()=>castNormalVote(phase));
 
   overlay.append(timerRow, normBtn);
@@ -473,14 +476,17 @@ function patchPickVotes(data, phase){
   const normalVotes=data.normalVotes?Object.keys(data.normalVotes):[];
   const myNormal=normalVotes.includes(S.username);
   const nb=document.getElementById("picknormalbtn");
-  if(nb){nb.textContent=myNormal?"✓ GO NORMAL (voted)":"SKIP — PLAY NORMAL";nb.classList.toggle("voted",myNormal);}
+  if(nb){
+    nb.innerHTML = (myNormal?"✓ GO NORMAL":"SKIP — PLAY NORMAL") + ` <span class="norm-tally">${normalVotes.length}/2</span>`;
+    nb.classList.toggle("voted",myNormal);
+  }
   if(normalVotes.length>=2) resolvePickPhase(phase, data, "none");
 }
 
 let _resolving=false;
 function resolvePickPhase(phase, data, chosenId){
   if(_resolving) return; _resolving=true;
-  if(!S.isHost){_resolving=false;return;}
+  
   clearInterval(pickPhaseTimer);
   const grid=document.getElementById("pickpopupgrid");
   if(grid){
@@ -493,15 +499,19 @@ function resolvePickPhase(phase, data, chosenId){
     document.getElementById("pickoverlay")?.remove();
     const tc=document.getElementById("traycard-"+phase);
     if(tc) revealTrayCard(tc, phase, {...data,[phase==="visual"?"visualPick":"gameplayPick"]:chosenId});
-    const nextPhase=phase==="visual"?"gameplay":"perks";
     
-    setTimeout(async () => {
-      await fbUpdate(`/duels/${S.roomCode}`,{
-        pickingPhase:nextPhase,
-        [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
-      });
-      _resolving=false;
-    }, 2000);
+    if (S.isHost) {
+      const nextPhase=phase==="visual"?"gameplay":"perks";
+      setTimeout(async () => {
+        await fbUpdate(`/duels/${S.roomCode}`,{
+          pickingPhase:nextPhase,
+          [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
+        });
+        _resolving=false;
+      }, 5000); // 5s transition
+    } else {
+      setTimeout(()=>{ _resolving=false; }, 5000);
+    }
   }, 450);
 }
 
