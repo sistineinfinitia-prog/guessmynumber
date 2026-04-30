@@ -5,7 +5,7 @@ let roundHistory=[], lastChatCount=0;
 let telepathyCooldown=false, telepathyCdTimer=null;
 let lastGuessInfo=null, hasUsedComeback=false, soundEnabled=true;
 
-let S={screen:"home",username:"",roomCode:"",isHost:false,roomData:null,round:1,bestOf:null};
+let S={screen:"home",username:"",roomCode:"",isHost:false,roomData:null,round:1,bestOf:null,myPerk:null,myPerkUsed:false};
 
 const TAUNT_PRESETS=["not even close 💀","getting warmer 🔥","you'll never get it 😏","try harder babe 💅","lucky guess? 😤","I'm in your head 🧠","skill issue 💅","touch grass first 🌿"];
 const EMOJI_LIST=["❤️","😤","💀","🫦","😏","🔥","💅","😘"];
@@ -54,4 +54,16 @@ const GAMEPLAY_MODS = [
     desc:"Chat, taunts, and emojis are fully disabled. No communication. Pure cold silence." },
   { id:"shrinking", icon:"📉", name:"Shrinking", type:"gameplay",
     desc:"Every 3 total guesses, the number range shrinks 10% inward from each side. Race before it collapses." },
+];
+
+const PERK_MODS = [
+  { id:"oracle", icon:"🔮", name:"The Oracle", type:"hint",
+    desc:"Instantly reveals whether the opponent's secret number is Odd or Even.",
+    eventDesc:"🔮 [PLAYER] USED THE ORACLE: Found out if the answer is Odd or Even!" },
+  { id:"doubletap", icon:"🔫", name:"Double Tap", type:"hint",
+    desc:"When activated, grants you two back-to-back guesses in a single turn.",
+    eventDesc:"🔫 [PLAYER] USED DOUBLE TAP: They stole an extra turn!" },
+  { id:"screencrack", icon:"💥", name:"Screen Crack", type:"sabotage",
+    desc:"Shatters the opponent's screen and instantly skips their current turn.",
+    eventDesc:"💥 [PLAYER] ACTIVATED SCREEN CRACK: Opponent's turn is skipped!" }
 ];

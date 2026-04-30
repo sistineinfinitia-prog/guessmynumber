@@ -261,7 +261,9 @@ function renderModifiers(){
   const screen=d("screen");
   const data=S.roomData||{};
   const players=Object.keys(data.players||{});
-  const pool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
+  const sharedPool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
+  const myPerks=pickPerks(S.roomCode, S.username);
+  const fullPool=[...sharedPool, ...myPerks];
 
   screen.append(
     el("div",{class:"logo",style:"font-size:32px;margin-bottom:2px"},"GUESSR"),
@@ -273,11 +275,11 @@ function renderModifiers(){
 
   const grid=d("mod-grid");
   grid.id="modgrid";
-  pool.forEach((mod,idx)=>{
+  fullPool.forEach((mod,idx)=>{
     const card = buildModCard(mod,data,players);
     card.style.opacity="0";
     card.style.animation=`modSlideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`;
-    card.style.animationDelay=`${idx * 0.08}s`;
+    card.style.animationDelay=`${idx * 0.05}s`;
     grid.append(card);
   });
   screen.append(grid);
@@ -350,10 +352,19 @@ function renderModifiers(){
 }
 
 function buildModCard(mod,data,players){
-  const votes=data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
-  const myVoted=votes.includes(S.username);
-  const bothVoted=votes.length>=2;
-  const cls=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}`;
+  let myVoted = false;
+  let bothVoted = false;
+  let votes = [];
+  
+  if(mod.type==="hint" || mod.type==="sabotage"){
+    myVoted = data.players?.[S.username]?.perk === mod.id;
+  } else {
+    votes = data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
+    myVoted = votes.includes(S.username);
+    bothVoted = votes.length>=2;
+  }
+  
+  const cls=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted&&mod.type!=="hint"&&mod.type!=="sabotage"?" single-voted":""}${(mod.type==="hint"||mod.type==="sabotage")&&myVoted?" perk-selected":""}`;
   const card=d(cls);
   card.id="modcard-"+mod.id;
 
@@ -362,34 +373,55 @@ function buildModCard(mod,data,players){
   const name=el("div",{class:"mod-name"},mod.name);
   const desc=el("div",{class:"mod-desc"},mod.desc);
 
-  const voteBtnText=bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
-  const voteBtn=el("button",{class:"mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"")},voteBtnText);
+  let voteBtnText = "";
+  if(mod.type==="hint" || mod.type==="sabotage"){
+    voteBtnText = myVoted?"⚡ CHOSEN PERK":"CHOOSE THIS";
+  } else {
+    voteBtnText = bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
+  }
+  const btnCls = "mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"");
+  const voteBtn=el("button",{class:btnCls},voteBtnText);
   voteBtn.addEventListener("click",()=>toggleModVote(mod.id));
 
-  // Tally: x/2 picked this
-  const tally=el("div",{class:"mod-vote-tally"+(votes.length>0?" has-votes":"")},`${votes.length}/2 picked this`);
+  const tally=el("div",{class:"mod-vote-tally"+(votes.length>0?" has-votes":"")});
+  if(mod.type!=="hint" && mod.type!=="sabotage"){
+    tally.textContent = `${votes.length}/2 picked this`;
+  }
 
   card.append(typeBadge,icon,name,desc,voteBtn,tally);
   return card;
 }
 
 function patchModifiers(data){
-  const pool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
+  const sharedPool=(data.modifierPool||[]).map(id=>[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===id)).filter(Boolean);
+  const myPerks=pickPerks(S.roomCode, S.username);
+  const fullPool=[...sharedPool, ...myPerks];
   const players=Object.keys(data.players||{});
-  pool.forEach(mod=>{
+  fullPool.forEach(mod=>{
     const card=document.getElementById("modcard-"+mod.id);
     if(!card)return;
-    const votes=data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
-    const myVoted=votes.includes(S.username);
-    const bothVoted=votes.length>=2;
-    card.className=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}`;
+    let myVoted = false;
+    let bothVoted = false;
+    let votes = [];
+    if(mod.type==="hint" || mod.type==="sabotage"){
+      myVoted = data.players?.[S.username]?.perk === mod.id;
+    } else {
+      votes = data.modifierVotes?.[mod.id]?Object.keys(data.modifierVotes[mod.id]):[];
+      myVoted = votes.includes(S.username);
+      bothVoted = votes.length>=2;
+    }
+    card.className=`mod-card ${mod.type}-mod${bothVoted?" both-voted":""}${myVoted&&!bothVoted&&mod.type!=="hint"&&mod.type!=="sabotage"?" single-voted":""}${(mod.type==="hint"||mod.type==="sabotage")&&myVoted?" perk-selected":""}`;
     const voteBtn=card.querySelector(".mod-vote-btn");
     if(voteBtn){
-      voteBtn.textContent=bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
+      if(mod.type==="hint" || mod.type==="sabotage"){
+        voteBtn.textContent=myVoted?"⚡ CHOSEN PERK":"CHOOSE THIS";
+      } else {
+        voteBtn.textContent=bothVoted?"✓ ACTIVE 💕":myVoted?"✓ YOU VOTED":"VOTE FOR THIS";
+      }
       voteBtn.className="mod-vote-btn"+(myVoted?" voted":"")+(bothVoted?" both":"");
     }
     const tally=card.querySelector(".mod-vote-tally");
-    if(tally){
+    if(tally && mod.type!=="hint" && mod.type!=="sabotage"){
       tally.textContent=`${votes.length}/2 picked this`;
       tally.className="mod-vote-tally"+(votes.length>0?" has-votes":"");
     }
@@ -406,6 +438,20 @@ function patchModifiers(data){
 
 async function toggleModVote(modId){
   const data=await fbGet(`/duels/${S.roomCode}`);
+  
+  // Check if it's a perk
+  const perkDef=PERK_MODS.find(m=>m.id===modId);
+  if(perkDef){
+    const existing=data.players?.[S.username]?.perk;
+    if(existing===modId){
+      await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:null});
+    } else {
+      await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:modId});
+      await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:null});
+    }
+    return;
+  }
+
   const existing=data.modifierVotes?.[modId]?.[S.username];
   
   if(existing){
@@ -820,6 +866,78 @@ function renderGuessCard(gc,data,me,opp,myTurn){
   } else {
     gc.append(el("div",{class:"waiting-label"},"Opponent's turn — sit tight... 💭"));
   }
+
+  // Perk Button
+  const myPerk = data.players?.[me]?.perk;
+  const perkUsed = data.players?.[me]?.perkUsed;
+  if(myPerk){
+    const pDef=PERK_MODS.find(m=>m.id===myPerk);
+    if(pDef){
+      const perkBtn=el("button",{class:"perk-action-btn",id:"perkbtn"},perkUsed?"⚡ PERK USED":`⚡ USE ${pDef.name.toUpperCase()}`);
+      if(perkUsed) perkBtn.disabled=true;
+      else perkBtn.addEventListener("click",()=>triggerPerk(myPerk));
+      gc.append(perkBtn);
+    }
+  }
+
+  // Oracle Hint
+  const perkRes = data.players?.[me]?.perkResult;
+  if (perkRes) {
+    gc.append(el("div", {style:"color:#4ade80;font-size:12px;margin-top:8px;text-align:center;border:1px solid rgba(74,222,128,0.3);padding:6px;border-radius:6px;background:rgba(74,222,128,0.1);letter-spacing:1px;"}, perkRes));
+  }
+}
+
+async function triggerPerk(perkId){
+  const data = await fbGet(`/duels/${S.roomCode}`);
+  const me = S.username;
+  if(data.players?.[me]?.perkUsed) return;
+  
+  const opp = Object.keys(data.players||{}).find(p=>p!==me)||"Opponent";
+  const myTurn = data.turn === me;
+  const telepathy = hasMod(data, "telepathy");
+  
+  if (perkId === "screencrack" && myTurn && !telepathy) {
+    const btn = document.getElementById("perkbtn");
+    if(btn){
+      const old = btn.textContent;
+      btn.textContent = "ALREADY YOUR TURN!";
+      setTimeout(()=>btn.textContent=old, 1500);
+    }
+    return;
+  }
+  
+  if ((perkId === "doubletap" || perkId === "oracle") && !myTurn && !telepathy) {
+    const btn = document.getElementById("perkbtn");
+    if(btn){
+      const old = btn.textContent;
+      btn.textContent = "WAIT FOR YOUR TURN!";
+      setTimeout(()=>btn.textContent=old, 1500);
+    }
+    return;
+  }
+
+  const btn = document.getElementById("perkbtn");
+  if(btn){ btn.disabled=true; btn.textContent="⚡ PERK USED"; }
+
+  const pDef = PERK_MODS.find(m=>m.id===perkId);
+  const msg = pDef ? pDef.eventDesc.replace("[PLAYER]", me) : `⚠️ ${me} USED A PERK!`;
+  
+  const updates = {
+    [`players/${me}/perkUsed`]: true,
+    activeEvent: { perk: perkId, player: me, ts: Date.now(), msg: msg }
+  };
+
+  if (perkId === "screencrack") {
+    if(!telepathy) updates.turn = me;
+  } else if (perkId === "oracle") {
+    const oppNum = data.players[opp].number;
+    const isEven = oppNum % 2 === 0;
+    updates[`players/${me}/perkResult`] = `🔮 THE ORACLE SAYS THE NUMBER IS ${isEven?"EVEN":"ODD"}`;
+  } else if (perkId === "doubletap") {
+    updates[`players/${me}/doubleTapActive`] = true;
+  }
+
+  await fbUpdate(`/duels/${S.roomCode}`, updates);
 }
 
 // Global Enter key hook
@@ -847,6 +965,7 @@ async function broadcastTyping(isTyping){
   if(isTyping)typingTimer=setTimeout(()=>broadcastTyping(false),4000);
 }
 
+let lastProcessedEventTs = 0;
 function patchGame(data){
   if(!data)return;
   const players=Object.keys(data.players||{});
@@ -854,6 +973,23 @@ function patchGame(data){
   const opp=players.find(p=>p!==me)||"Opponent";
   const telepathy=hasMod(data,"telepathy");
   const myTurn=telepathy?true:data.turn===me;
+
+  if(data.activeEvent && data.activeEvent.ts > lastProcessedEventTs) {
+    lastProcessedEventTs = data.activeEvent.ts;
+    const msg = data.activeEvent.msg;
+    const popup = el("div", {class:"global-perk-popup"});
+    popup.append(el("div", {class:"gpp-title"}, "⚠️ PERK ACTIVATED"));
+    popup.append(el("div", {class:"gpp-desc"}, msg));
+    document.body.append(popup);
+    if(soundEnabled && window.SFX) SFX.click();
+    setTimeout(()=>popup.remove(), 4000);
+    
+    if (data.activeEvent.perk === "screencrack" && data.activeEvent.player !== me) {
+      if(soundEnabled && window.SFX) SFX.blocked();
+      const crack = el("div", {class:"screen-crack crack-active"});
+      document.body.append(crack);
+    }
+  }
 
   const mypt=document.getElementById("mypturn"),oppt=document.getElementById("oppturn");
   const myside=document.getElementById("myside"),oppside=document.getElementById("oppside");
@@ -1143,7 +1279,11 @@ async function submitGuess(){
       [`players/${S.username}/score`]:newScore,[`players/${S.username}/streak`]:newStreak,[`players/${opp}/streak`]:0,
     });
   } else {
-    if(!telepathy)await fbUpdate(`/duels/${S.roomCode}`,{turn:opp});
+    if(data.players?.[S.username]?.doubleTapActive){
+      await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{doubleTapActive:null});
+    } else if(!telepathy) {
+      await fbUpdate(`/duels/${S.roomCode}`,{turn:opp});
+    }
   }
 }
 

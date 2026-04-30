@@ -61,6 +61,20 @@ function pickModifiers(roomCode){
   return [...vis,...gp];
 }
 
+// Seeded random pick of 3 personal perks per player
+function pickPerks(roomCode, username){
+  let seed=0;
+  const str = roomCode + username;
+  for(let i=0;i<str.length;i++) seed=(seed*31+str.charCodeAt(i))>>>0;
+  function seededRand(max){ seed=(seed*1664525+1013904223)>>>0; return seed%max; }
+  function shuffle(arr){
+    const a=[...arr];
+    for(let i=a.length-1;i>0;i--){ const j=seededRand(i+1); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+  }
+  return shuffle(PERK_MODS).slice(0,3);
+}
+
 // ── FLOATING EMOJI ────────────────────────────────────────────
 function floatEmoji(em,x,y){
   const layer=document.getElementById("efloat");

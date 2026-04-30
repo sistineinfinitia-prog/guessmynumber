@@ -209,6 +209,19 @@ input::placeholder { color: var(--mut); }
   box-shadow: 0 0 20px rgba(255,107,157,0.2), 0 0 0 1px var(--acc) inset;
   animation: modGlow 1.5s ease-in-out infinite;
 }
+.mod-card.single-voted {
+  border-color: rgba(255,255,255,0.3);
+  box-shadow: 0 0 10px rgba(255,255,255,0.05), 0 0 0 1px rgba(255,255,255,0.2) inset;
+}
+.mod-card.perk-selected {
+  border-color: #f5cb5c;
+  box-shadow: 0 0 20px rgba(245, 203, 92, 0.2), 0 0 0 1px #f5cb5c inset;
+  animation: perkGlow 2s ease-in-out infinite;
+}
+@keyframes perkGlow {
+  0%,100%{box-shadow:0 0 12px rgba(245, 203, 92,0.2),0 0 0 1px #f5cb5c inset}
+  50%{box-shadow:0 0 24px rgba(245, 203, 92,0.4),0 0 0 1px #f5cb5c inset}
+}
 @keyframes modGlow {
   0%,100%{box-shadow:0 0 16px rgba(255,107,157,0.2),0 0 0 1px var(--acc) inset}
   50%{box-shadow:0 0 30px rgba(255,107,157,0.38),0 0 0 1px var(--acc) inset}
@@ -220,6 +233,8 @@ input::placeholder { color: var(--mut); }
 }
 .mod-type-badge.visual { background: rgba(255,133,179,0.15); color: var(--blu); border: 1px solid rgba(255,133,179,0.3); }
 .mod-type-badge.gameplay { background: rgba(200,56,90,0.15); color: var(--rose); border: 1px solid rgba(200,56,90,0.3); }
+.mod-type-badge.hint { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
+.mod-type-badge.sabotage { background: rgba(255, 68, 0, 0.15); color: #ff8800; border: 1px solid rgba(255, 68, 0, 0.3); }
 
 .mod-icon { font-size: 30px; display: block; margin-bottom: 6px; }
 .mod-name { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 16px; letter-spacing: 2px; color: var(--txt); margin-bottom: 4px; }
@@ -233,6 +248,7 @@ input::placeholder { color: var(--mut); }
 .mod-vote-btn:hover { border-color: var(--acc); color: var(--acc); }
 .mod-vote-btn.voted { background: rgba(255,107,157,0.15); border-color: var(--acc); color: var(--acc); }
 .mod-vote-btn.both { background: rgba(255,107,157,0.25); border-color: var(--acc); color: var(--acc); }
+.perk-selected .mod-vote-btn { background: rgba(245, 203, 92, 0.15); border-color: #f5cb5c; color: #f5cb5c; }
 
 .mod-vote-tally {
   font-size: 9px; color: var(--mut); margin-top: 5px; letter-spacing: 1px; min-height: 14px; transition: color .2s, text-shadow .2s;
@@ -604,6 +620,52 @@ body.mod-heartbeat .gcard { animation: heartbeatPulse 1.5s ease-in-out infinite;
   .mod-grid { grid-template-columns: repeat(2, 1fr); }
   .duel { gap: 8px; }
 }
+@media (max-width: 500px) {
+  .mod-grid { grid-template-columns: 1fr; }
+}
+
+/* ── PERK BUTTON ── */
+.perk-action-btn {
+  width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px;
+  font-family: 'Bebas Neue', Impact, sans-serif; font-size: 16px; letter-spacing: 2px;
+  cursor: pointer; transition: all 0.2s; border: 1px solid #f5cb5c;
+  background: rgba(245, 203, 92, 0.1); color: #f5cb5c;
+  box-shadow: 0 0 15px rgba(245, 203, 92, 0.1);
+  animation: perkPulseBtn 2s infinite;
+}
+.perk-action-btn:hover { background: rgba(245, 203, 92, 0.2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245, 203, 92, 0.25); }
+.perk-action-btn:disabled { opacity: 0.3 !important; cursor: not-allowed; animation: none !important; filter: grayscale(1); }
+@keyframes perkPulseBtn { 0%,100%{box-shadow:0 0 5px rgba(245, 203, 92, 0.2)} 50%{box-shadow:0 0 20px rgba(245, 203, 92, 0.4)} }
+
+/* ── GLOBAL PERK POPUP ── */
+.global-perk-popup {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  width: calc(100% - 40px); max-width: 400px;
+  background: rgba(15, 5, 8, 0.95); border: 1px solid #f5cb5c; border-radius: 12px;
+  padding: 14px 20px; z-index: 10000; text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(245, 203, 92, 0.3);
+  animation: slideDownPop 4s ease-in-out forwards;
+}
+@keyframes slideDownPop {
+  0% { transform: translate(-50%, -150%); opacity: 0; }
+  10%, 90% { transform: translate(-50%, 0); opacity: 1; }
+  100% { transform: translate(-50%, -150%); opacity: 0; }
+}
+.gpp-title { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 22px; color: #f5cb5c; letter-spacing: 2px; margin-bottom: 2px; }
+.gpp-desc { font-size: 11px; color: var(--mut); letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── SCREEN CRACK VFX ── */
+.screen-crack {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: url('https://i.imgur.com/8Yv2a6y.png');
+  background-size: cover; opacity: 0; mix-blend-mode: screen;
+}
+.crack-active { animation: crackImpact 0.5s forwards; }
+@keyframes crackImpact { 
+  0% { opacity:0; transform: scale(1.5) rotate(5deg); }
+  100% { opacity:1; transform: scale(1) rotate(0); }
+}
+
 @media (max-width: 500px) {
   .screen{padding:8px} .logo{font-size:42px} .duel{gap:6px} .pside{padding:10px 8px}
   .pname-row{font-size:14px} .card{padding:14px} .presets{grid-template-columns:repeat(2,1fr)}
