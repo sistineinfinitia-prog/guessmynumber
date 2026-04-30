@@ -255,6 +255,7 @@ input::placeholder { color: var(--mut); }
   animation: overlayFadeIn 0.3s ease;
 }
 @keyframes overlayFadeIn { from{opacity:0} to{opacity:1} }
+@keyframes overlayFadeOut { from{opacity:1} to{opacity:0} }
 
 .pick-overlay-title {
   font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; letter-spacing: 4px;

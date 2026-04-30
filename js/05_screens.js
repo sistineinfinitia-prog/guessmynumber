@@ -631,39 +631,48 @@ async function chooseMysteryCard(mc, grid, data){
   grid.querySelectorAll(".mystery-card:not(.revealed)").forEach(c=>c.classList.add("fade-out"));
   // Write to Firebase
   await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{perk:chosen.id,perkReady:true});
-  // Check if both ready
-  const fresh=await fbGet(`/duels/${S.roomCode}`);
-  const players=Object.keys(fresh.players||{});
-  const allReady=players.every(p=>fresh.players[p]?.perkReady);
-  if(allReady && S.isHost){
-    setTimeout(async()=>{
-      await fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
-    }, 2000);
-  } else {
-    // Show waiting label
-    setTimeout(()=>{
-      const overlay=document.getElementById("pickoverlay");
-      if(!overlay) return;
-      overlay.innerHTML="";
-      overlay.append(
-        el("div",{class:"pick-overlay-title"},"⚡ PERK LOCKED IN!"),
-        el("div",{class:"pick-waiting-label"},`You got: ${chosen.icon} ${chosen.name}`),
-        el("div",{class:"pick-waiting-label",style:"opacity:0.5"},"⏳ Waiting for opponent...")
-      );
-    },800);
-  }
+  
+  // Show waiting label (will just be skipped if allReady triggers removal)
+  setTimeout(()=>{
+    const overlay=document.getElementById("pickoverlay");
+    if(!overlay) return;
+    overlay.innerHTML="";
+    overlay.append(
+      el("div",{class:"pick-overlay-title"},"⚡ PERK LOCKED IN!"),
+      el("div",{class:"pick-waiting-label"},`You got: ${chosen.icon} ${chosen.name}`),
+      el("div",{class:"pick-waiting-label",style:"opacity:0.5"},"⏳ Waiting for opponent...")
+    );
+  },800);
 }
 
 let _perkCountdownQueued = false;
 function patchPerkWaiting(data){
   if(_perkCountdownQueued) return;
   const players=Object.keys(data.players||{});
-  const allReady=players.every(p=>data.players[p]?.perkReady);
-  if(allReady && S.isHost && data.pickingPhase !== "countdown") {
+  const allReady=players.length===2 && players.every(p=>data.players[p]?.perkReady);
+  if(allReady && data.pickingPhase !== "countdown") {
     _perkCountdownQueued = true;
-    setTimeout(()=>{
-      fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
-    }, 2000);
+    _resolving = true; // Lock to prevent syncPickPhase from reopening popup
+    
+    // Fade and remove overlay so players can admire the tray
+    const overlay=document.getElementById("pickoverlay");
+    if(overlay) {
+      overlay.style.animation="overlayFadeOut 0.4s ease forwards";
+      setTimeout(()=>overlay.remove(),400);
+    }
+
+    // Reveal perk tray card immediately
+    const tc=document.getElementById("traycard-perks");
+    if(tc && !tc.classList.contains("done-phase")) revealTrayCard(tc, "perks", data);
+
+    if(S.isHost) {
+      setTimeout(()=>{
+        fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
+        _resolving = false;
+      }, 3000); // 3 seconds to view the tray
+    } else {
+      setTimeout(()=>{ _resolving=false; }, 3000);
+    }
   }
 }
 
