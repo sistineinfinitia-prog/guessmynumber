@@ -62,9 +62,9 @@ function pickModifiers(roomCode){
 }
 
 // Seeded random pick of 3 personal perks per player
-function pickPerks(roomCode, username){
-  let seed=0;
-  const str = roomCode + username;
+function pickPerks(roomCode, username, round = 1) {
+  let seed = 0;
+  const str = roomCode + username + round;
   for(let i=0;i<str.length;i++) seed=(seed*31+str.charCodeAt(i))>>>0;
   function seededRand(max){ seed=(seed*1664525+1013904223)>>>0; return seed%max; }
   function shuffle(arr){
