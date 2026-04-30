@@ -57,6 +57,7 @@ async function createRoom(){
     modifierPool:pool,modifierVotes:null,activeModifiers:null,normalVotes:null,peekRanges:null
   });
   S.username=username;S.roomCode=code;S.isHost=true;S.round=1;S.bestOf=bestOf;roundHistory=[];lastChatCount=0;lastGuessInfo=null;
+  if(soundEnabled&&window.SFX)SFX.join();
   startPolling(code);S.screen="lobby";render();
 }
 
@@ -82,6 +83,7 @@ async function joinRoom(){
   if(room.players?.[username]){err.textContent="Name taken in this room";return;}
   await fbUpdate(`/duels/${code}/players/${username}`,{score:0,ready:false,streak:0,online:Date.now()});
   S.username=username;S.roomCode=code;S.isHost=false;S.round=1;roundHistory=[];lastChatCount=0;
+  if(soundEnabled&&window.SFX)SFX.join();
   startPolling(code);S.screen="lobby";render();
 }
 
@@ -122,8 +124,8 @@ async function poll(code){
   if(chats.length>lastChatCount){
     chats.slice(lastChatCount).forEach(c=>{
       if(c.player!==S.username){
-        const em=CHAT_EMOJIS[Math.floor(Math.random()*CHAT_EMOJIS.length)];
-        floatEmoji(em,15+Math.random()*20,50+Math.random()*20);
+        floatEmoji("💬💬",15+Math.random()*20,50+Math.random()*20);
+        if(soundEnabled && window.SFX) SFX.chatReceive();
       }
     });
     lastChatCount=chats.length;
@@ -145,7 +147,7 @@ async function poll(code){
     else patchModifiers(data);
   } else if(data.status==="playing"){
     applyVisualMods(data);
-    if(prev!=="game"){S.screen="game";lastReactionCount=Object.values(data.reactions||{}).length;lastChatCount=Object.values(data.taunts||{}).length;render();}
+    if(prev!=="game"){S.screen="game";lastReactionCount=Object.values(data.reactions||{}).length;lastChatCount=Object.values(data.taunts||{}).length;if(soundEnabled&&window.SFX)SFX.start();render();}
     else patchGame(data);
   } else if(data.status==="finished"){
     if(prev!=="winner"){S.screen="winner";render();launchConfetti();}
@@ -732,9 +734,9 @@ function buildChatPanel(data,me,opp){
   const doSend=(evt)=>{
     const text=ti.value.trim();if(!text)return;
     ti.value="";
-    const em=CHAT_EMOJIS[Math.floor(Math.random()*CHAT_EMOJIS.length)];
-    floatEmoji(em,60+Math.random()*20,50+Math.random()*20);
+    floatEmoji("💬💬",60+Math.random()*20,50+Math.random()*20);
     if(document.body.classList.contains("mod-glitter") && evt) triggerGlitter(evt.clientX,evt.clientY);
+    if(soundEnabled&&window.SFX) SFX.chatSend();
     fbPush(`/duels/${S.roomCode}/taunts`,{player:S.username,text,ts:Date.now()});
   };
   ti.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();doSend(e);}});
@@ -745,8 +747,8 @@ function buildChatPanel(data,me,opp){
   TAUNT_PRESETS.forEach(t=>{
     const btn=el("button",{class:"taunt-preset"}); btn.textContent=t;
     btn.addEventListener("click",()=>{
-      const em=CHAT_EMOJIS[Math.floor(Math.random()*CHAT_EMOJIS.length)];
-      floatEmoji(em,60+Math.random()*20,50+Math.random()*20);
+      floatEmoji("💬💬",60+Math.random()*20,50+Math.random()*20);
+      if(soundEnabled&&window.SFX) SFX.chatSend();
       fbPush(`/duels/${S.roomCode}/taunts`,{player:S.username,text:t,ts:Date.now()});
       taunPop.classList.remove("open");
     });
@@ -829,6 +831,13 @@ document.addEventListener("keydown", e => {
     if (document.activeElement && document.activeElement.id === "ci") return;
     const gbtn = document.getElementById("gbtn");
     if (gbtn && !gbtn.disabled) submitGuess();
+  }
+});
+
+// Global Click SFX
+document.addEventListener("click", e => {
+  if (e.target.tagName === "BUTTON" || e.target.closest("button") || e.target.classList.contains("taunt-preset")) {
+    if (soundEnabled && typeof SFX !== "undefined" && SFX.click) SFX.click();
   }
 });
 
@@ -1015,7 +1024,11 @@ async function submitGuess(){
   const myPast=allPast.filter(g=>g.player===S.username).map(g=>g.guess);
   const {lo:validLo,hi:validHi}=computeRange(data,S.username,opp,scrambled);
   if(isNaN(guess)||guess<validLo||guess>validHi){
-    SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);return;
+    if(soundEnabled)SFX.blocked();
+    input.value="OUT OF RANGE";
+    input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake","guess-feedback","feedback-lower");
+    setTimeout(()=>{input.value="";input.classList.remove("shake","guess-feedback","feedback-lower");},800);
+    return;
   }
 
   // Local Guard to prevent double guesses bypassing Firebase

@@ -90,5 +90,11 @@ const SFX=(()=>{
     correct(){[523,659,784,1047].forEach((f,i)=>tone(f,'sine',0.2,0.18,i*0.1));},
     yourTurn(){tone(880,'sine',0.15,0.08);tone(1100,'sine',0.1,0.08,0.1);},
     blocked(){tone(200,'sawtooth',0.1,0.15);},
+    click(){tone(800,'sine',0.05,0.05);},
+    chatSend(){tone(700,'sine',0.08,0.08); tone(900,'sine',0.08,0.05,0.08);},
+    chatReceive(){tone(900,'sine',0.08,0.08); tone(700,'sine',0.08,0.05,0.08);},
+    emoji(){tone(1200,'sine',0.05,0.05);tone(1400,'sine',0.05,0.05,0.05);},
+    join(){tone(440,'sine',0.1,0.1);tone(554,'sine',0.1,0.1,0.1);tone(659,'sine',0.1,0.2,0.2);},
+    start(){tone(880,'square',0.1,0.1);tone(1108,'square',0.1,0.1,0.1);tone(1318,'square',0.1,0.3,0.2);},
   };
 })();
