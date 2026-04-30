@@ -321,13 +321,19 @@ function syncPickPhase(data, phase){
     const phaseOrder=["visual","gameplay","perks","countdown"];
     const phaseIdx=phaseOrder.indexOf(phase);
     const catIdx=phaseOrder.indexOf(cat);
-    if(catIdx<phaseIdx) revealTrayCard(tc, cat, data);
+    if(catIdx<phaseIdx && !tc.classList.contains("flip-in") && !tc.classList.contains("done-phase")) {
+      revealTrayCard(tc, cat, data);
+    }
     else if(catIdx===phaseIdx) tc.classList.add("active-phase");
   });
-  if(phase==="visual")  openPickPopup("visual", data);
-  else if(phase==="gameplay") openPickPopup("gameplay", data);
-  else if(phase==="perks")   openPickPopup("perks", data);
-  else if(phase==="countdown") startPickCountdown();
+
+  const existingOverlay = document.getElementById("pickoverlay");
+  const isCorrectPhaseOpen = existingOverlay && existingOverlay.dataset.phase === phase;
+  
+  if(phase==="visual" && !isCorrectPhaseOpen)  openPickPopup("visual", data);
+  else if(phase==="gameplay" && !isCorrectPhaseOpen) openPickPopup("gameplay", data);
+  else if(phase==="perks" && !isCorrectPhaseOpen)   openPickPopup("perks", data);
+  else if(phase==="countdown" && !document.querySelector(".countdown-overlay")) startPickCountdown();
 }
 
 function patchModifiers(data){
