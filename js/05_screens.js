@@ -264,12 +264,15 @@ function renderModifiers(){
   const screen=d("screen");
   const data=S.roomData||{};
   _pickCenterDir = Math.random()<0.5?"left":"right";
+  _pickCountdownActive = false;
+  _perkCountdownQueued = false;
+  _resolving = false;
 
   screen.append(
     el("div",{class:"logo",style:"font-size:32px;margin-bottom:2px"},"GUESSR"),
-    el("div",{class:"mod-screen-header"},
-      el("div",{class:"mod-screen-title"},"CHOOSE YOUR CHAOS"),
-      el("div",{class:"mod-screen-sub"},"3 ROUNDS OF CARDS — YOUR FATE IS SEALED")
+    el("div",{class:"cinematic-header"},
+      el("div",{class:"cinematic-title"},"CHOOSE YOUR CHAOS"),
+      el("div",{class:"cinematic-sub"},"3 ROUNDS OF CARDS — YOUR FATE IS SEALED")
     )
   );
 
@@ -511,9 +514,9 @@ function resolvePickPhase(phase, data, chosenId){
           modifierDeadline: Date.now() + 30000
         });
         _resolving=false;
-      }, 3500); // 3.5s transition
+      }, 2000); // 2s transition
     } else {
-      setTimeout(()=>{ _resolving=false; }, 3500);
+      setTimeout(()=>{ _resolving=false; }, 2000);
     }
   }, 450);
 }
@@ -533,17 +536,9 @@ function startPickTimer(data, phase){
     if(row) row.classList.toggle("hurry",left<=5);
     if(left<=0 && S.isHost){
       clearInterval(pickPhaseTimer);
-      // Auto-pick highest voted
+      // Auto-skip (go normal) when timer hits 0
       const freshData=await fbGet(`/duels/${S.roomCode}`);
-      const mods=phase==="visual"?
-        (freshData.modifierPool||[]).map(id=>VISUAL_MODS.find(m=>m.id===id)).filter(Boolean):
-        (freshData.modifierPool||[]).map(id=>GAMEPLAY_MODS.find(m=>m.id===id)).filter(Boolean);
-      let best=null, bestCount=-1;
-      mods.forEach(m=>{
-        const cnt=Object.keys(freshData.modifierVotes?.[m.id]||{}).length;
-        if(cnt>bestCount){best=m.id;bestCount=cnt;}
-      });
-      resolvePickPhase(phase, freshData, best||"none");
+      resolvePickPhase(phase, freshData, "none");
     }
   },200);
 }
@@ -689,7 +684,11 @@ function startPickCountdown(){
     );
     document.body.append(ov);
     if(n<=0){
-      setTimeout(()=>{ov.remove(); _pickCountdownActive=false; if(S.isHost) startFromModifiers();},600);
+      setTimeout(()=>{
+        ov.remove();
+        // DO NOT set _pickCountdownActive=false here, it causes race condition loop!
+        if(S.isHost) startFromModifiers();
+      },600);
       return;
     }
     n--; setTimeout(show,1000);
