@@ -316,7 +316,7 @@ function syncPickPhase(data, phase){
   ["visual","gameplay","perks"].forEach(cat=>{
     const tc=document.getElementById("traycard-"+cat);
     if(!tc) return;
-    tc.classList.remove("active-phase","done-phase");
+    tc.classList.remove("active-phase");
     if(phase==="tray") return;
     const phaseOrder=["visual","gameplay","perks","countdown"];
     const phaseIdx=phaseOrder.indexOf(phase);
@@ -494,11 +494,14 @@ function resolvePickPhase(phase, data, chosenId){
     const tc=document.getElementById("traycard-"+phase);
     if(tc) revealTrayCard(tc, phase, {...data,[phase==="visual"?"visualPick":"gameplayPick"]:chosenId});
     const nextPhase=phase==="visual"?"gameplay":"perks";
-    await fbUpdate(`/duels/${S.roomCode}`,{
-      pickingPhase:nextPhase,
-      [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
-    });
-    _resolving=false;
+    
+    setTimeout(async () => {
+      await fbUpdate(`/duels/${S.roomCode}`,{
+        pickingPhase:nextPhase,
+        [phase==="visual"?"visualPick":"gameplayPick"]:chosenId
+      });
+      _resolving=false;
+    }, 2000);
   }, 450);
 }
 
@@ -627,7 +630,7 @@ async function chooseMysteryCard(mc, grid, data){
   if(allReady && S.isHost){
     setTimeout(async()=>{
       await fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
-    },1000);
+    }, 2000);
   } else {
     // Show waiting label
     setTimeout(()=>{
@@ -646,14 +649,22 @@ async function chooseMysteryCard(mc, grid, data){
 function patchPerkWaiting(data){
   const players=Object.keys(data.players||{});
   const allReady=players.every(p=>data.players[p]?.perkReady);
-  if(allReady && S.isHost) fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
+  if(allReady && S.isHost && data.pickingPhase !== "countdown") {
+    setTimeout(()=>{
+      fbUpdate(`/duels/${S.roomCode}`,{pickingPhase:"countdown"});
+    }, 2000);
+  }
 }
 
 // ── COUNTDOWN ─────────────────────────────────────────────────
+let _pickCountdownActive = false;
 function startPickCountdown(){
+  if(_pickCountdownActive) return;
+  _pickCountdownActive = true;
   document.getElementById("pickoverlay")?.remove();
   let n=5;
   const show=()=>{
+    if(S.screen!=="modifiers") { _pickCountdownActive=false; return; }
     document.querySelector(".countdown-overlay")?.remove();
     const ov=d("countdown-overlay");
     ov.append(
@@ -662,7 +673,7 @@ function startPickCountdown(){
     );
     document.body.append(ov);
     if(n<=0){
-      setTimeout(()=>{ov.remove(); if(S.isHost) startFromModifiers();},600);
+      setTimeout(()=>{ov.remove(); _pickCountdownActive=false; if(S.isHost) startFromModifiers();},600);
       return;
     }
     n--; setTimeout(show,1000);
