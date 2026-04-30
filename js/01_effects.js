@@ -75,6 +75,20 @@ function triggerGlitter(x,y){
   }
 }
 
+function launchConfetti(){
+  const layer=document.getElementById("burstLayer");
+  const colors=["#ff5797","#ff85b3","#ffacc5","#ffcad4","#f4acb7"];
+  for(let i=0;i<50;i++){
+    const c=document.createElement("div");
+    c.className="confetti-piece";
+    const x=Math.random()*window.innerWidth;
+    const size=5+Math.random()*10;
+    c.style.cssText=`left:${x}px;top:-20px;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};transform:rotate(${Math.random()*360}deg);animation:confettiFall ${2+Math.random()*3}s linear forwards;animation-delay:${Math.random()*2}s;`;
+    layer.append(c);
+    setTimeout(()=>c.remove(),5000);
+  }
+}
+
 
 
 // ── SOUND ────────────────────────────────────────────────────

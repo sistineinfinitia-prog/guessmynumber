@@ -1160,6 +1160,8 @@ function renderWinner(){
   const winnerStreak=data.winnerStreak||1;
   const myNum=data.players?.[me]?.number,oppNum=data.players?.[opp]?.number;
   const allGuesses=data.guesses?Object.values(data.guesses):[];
+  const myGuessCnt = allGuesses.filter(g => g.player === me).length;
+  const oppGuessCnt = allGuesses.filter(g => g.player === opp).length;
   const seriesWinner=data.seriesWinner;
   const isSeriesOver=!!seriesWinner;
 
