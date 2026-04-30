@@ -18,8 +18,15 @@ function renderHome(){
   });
   const rr=d("rr"); rr.append(el("input",{type:"number",value:"1",id:"cmin"}),el("input",{type:"number",value:"100",id:"cmax"}));
   const rg=d("ig"); rg.append(presetsLabel,presets,el("label",{style:"display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);margin-bottom:5px;margin-top:8px"},"Custom Range (min / max)"),rr);
+  // Best-of-X selector
+  const boLabel=el("label",{style:"display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);margin-bottom:5px;margin-top:10px"},"Series Mode");
+  const boSel=el("select",{id:"cbestof",style:"width:100%;background:var(--sur2);border:1px solid var(--brd);color:var(--txt);padding:8px 10px;border-radius:6px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:1px"});
+  [{v:"",l:"No limit — play forever"},{v:"1",l:"First to 1 win"},{v:"3",l:"First to 2 wins (Best of 3)"},{v:"5",l:"First to 3 wins (Best of 5)"},{v:"7",l:"First to 4 wins (Best of 7)"}].forEach(o=>{
+    const opt=el("option",{value:o.v},o.l); boSel.append(opt);
+  });
+  const bog=d("ig"); bog.append(boLabel,boSel);
   const cerr=el("div",{class:"err",id:"cerr"});
-  cc.append(ng,rg,cerr,el("button",{class:"btn bp",onClick:createRoom},"CREATE ROOM 💕"));
+  cc.append(ng,rg,bog,cerr,el("button",{class:"btn bp",onClick:createRoom},"CREATE ROOM 💕"));
   const jc=d("card");
   jc.append(el("div",{class:"ctitle"},"JOIN A DUEL"));
   const jni=el("input",{type:"text",placeholder:"Your username...",maxlength:"14",id:"jn"});
@@ -36,6 +43,7 @@ async function createRoom(){
   const username=document.getElementById("cn").value.trim();
   const min=parseInt(document.getElementById("cmin").value)||1;
   const max=parseInt(document.getElementById("cmax").value)||100;
+  const bestOf=parseInt(document.getElementById("cbestof")?.value)||null;
   const err=document.getElementById("cerr");
   if(!username){err.textContent="Enter your name";return;}
   if(min>=max){err.textContent="Max must be greater than min";return;}
@@ -43,12 +51,12 @@ async function createRoom(){
   const code=genCode();
   const pool=pickModifiers(code).map(m=>m.id);
   await fbSet(`/duels/${code}`,{
-    host:username,min,max,status:"waiting",round:1,
+    host:username,min,max,bestOf:bestOf||null,status:"waiting",round:1,
     players:{[username]:{score:0,ready:false,streak:0,online:Date.now()}},
     turn:null,guesses:null,taunts:null,reactions:null,typing:null,roundHistory:null,
     modifierPool:pool,modifierVotes:null,activeModifiers:null,normalVotes:null,peekRanges:null
   });
-  S.username=username;S.roomCode=code;S.isHost=true;S.round=1;roundHistory=[];lastChatCount=0;
+  S.username=username;S.roomCode=code;S.isHost=true;S.round=1;S.bestOf=bestOf;roundHistory=[];lastChatCount=0;lastGuessInfo=null;
   startPolling(code);S.screen="lobby";render();
 }
 
@@ -79,14 +87,25 @@ async function joinRoom(){
 
 // ── POLLING ──────────────────────────────────────────────────
 function startPolling(code){
-  stopPolling();lastHash="";
+  stopPolling(); lastHash="";
   pollTimer=setInterval(()=>poll(code),1200);
-  setInterval(()=>{if(S.roomCode)fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{online:Date.now()});},4000);
+  heartbeatTimer=setInterval(()=>{if(S.roomCode)fbUpdate(`/duels/${S.roomCode}/players/${S.username}`,{online:Date.now()});},4000);
 }
-function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}
+}
 
 async function poll(code){
+  const start=Date.now();
   const data=await fbGet(`/duels/${code}`);
+  const ping=Date.now()-start;
+  const pingEl=document.getElementById("ping-display");
+  if(pingEl){
+    pingEl.textContent=`${ping}ms`;
+    pingEl.classList.toggle("high-ping",ping>300);
+  }
+
   if(!data){stopPolling();S.screen="home";removeVisualMods();render();return;}
   const h=JSON.stringify(data);
   if(h===lastHash)return;
@@ -130,6 +149,10 @@ async function poll(code){
     else patchGame(data);
   } else if(data.status==="finished"){
     if(prev!=="winner"){S.screen="winner";render();launchConfetti();}
+  } else if(data.status==="abandoned"){
+    stopPolling();removeVisualMods();
+    Object.assign(S,{screen:"home",roomCode:"",isHost:false,roomData:null,round:1});
+    lastGuessInfo=null;render();
   }
 }
 
@@ -144,6 +167,15 @@ function renderLobby(){
     cd.style.color="var(--grn)";setTimeout(()=>cd.style.color="var(--acc)",1200);
   }},S.roomCode);
   card.append(cd,el("div",{class:"chint"},"CLICK TO COPY — share with your opponent 💕"));
+  // Share button
+  const shareRow=d("share-row");
+  const shareBtn=el("button",{class:"share-btn",onClick:()=>{
+    const msg=`Join my GUESSR duel! Room code: ${S.roomCode}`;
+    if(navigator.share){navigator.share({title:"GUESSR",text:msg,url:window.location.href}).catch(()=>{});}
+    else{navigator.clipboard.writeText(msg).then(()=>{shareBtn.textContent="✓ Copied!";setTimeout(()=>shareBtn.textContent="📎 Share",1500);});}
+  }},"📎 Share");
+  shareRow.append(shareBtn);
+  card.append(shareRow);
   card.append(el("div",{class:"sl"},"PLAYERS"));
   const pl=d("pl");pl.id="pl";card.append(pl);
   const sb=el("div",{class:"waitbox",id:"lsb"});card.append(sb);
@@ -471,7 +503,15 @@ function renderGame(){
 
   screen.append(d("gh",
     el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},"GUESSR 💕"),
-    el("div",{class:"rnd"},`ROUND ${S.round}`)
+    d("gh-right",
+      el("button",{id:"sound-toggle",class:"sound-toggle",title:soundEnabled?"Mute sounds":"Unmute sounds",onClick:()=>{
+        soundEnabled=!soundEnabled;
+        const btn=document.getElementById("sound-toggle");
+        if(btn)btn.textContent=soundEnabled?"🔊":"🔇";
+      }},soundEnabled?"🔊":"🔇"),
+      el("div",{id:"ping-display",class:"ping-display"}),
+      el("div",{class:"rnd"},`ROUND ${S.round}`)
+    )
   ));
 
   // Active mod pills
@@ -498,20 +538,34 @@ function renderGame(){
   const myStreak=parseInt(data.players?.[me]?.streak)||0;
   if(myStreak>=2)screen.append(d("fire-banner",`🔥 YOU'RE ON FIRE — ${myStreak} ROUND STREAK`));
 
-  // Peek ranges
+  // Peek ranges — button/popup instead of always-visible banner
   if(hasMod(data,"peek") && data.peekRanges?.[me]){
-    const ranges=data.peekRanges[me];
-    const wrap=d("peek-ranges");
-    wrap.append(el("div",{class:"peek-ranges-title"},"👁️ PEEK — ONE OF THESE RANGES CONTAINS THE NUMBER"));
-    const row=d("peek-ranges-row");
-    ranges.forEach(r=>{
-      row.append(el("span",{class:"peek-range-pill contains"},`${r.lo}–${r.hi}`));
+    let peeked=false;
+    const peekBtn=el("button",{class:"peek-action-btn",id:"peekbtn"},"👁️ TAP TO PEEK — RANGE HINT");
+    peekBtn.addEventListener("click",()=>{
+      if(peeked)return;
+      peeked=true;
+      peekBtn.textContent="👁️ PEEKED";
+      peekBtn.classList.add("used");
+      const ranges=data.peekRanges[me];
+      const overlay=d("peek-overlay");
+      const box=d("peek-box");
+      box.append(el("div",{class:"peek-box-title"},"👁️ PEEK — ONE RANGE CONTAINS THE NUMBER"));
+      const row=d("peek-ranges-row");
+      ranges.forEach(r=>row.append(el("span",{class:"peek-range-pill contains"},`${r.lo}–${r.hi}`)));
+      box.append(row);
+      const closeBtn=el("button",{class:"peek-close-btn"},"GOT IT ✔");
+      closeBtn.addEventListener("click",()=>overlay.remove());
+      box.append(closeBtn);
+      overlay.append(box);
+      document.getElementById("app").append(overlay);
     });
-    wrap.append(row);
-    screen.append(wrap);
+    screen.append(peekBtn);
   }
 
   // Duel panels
+  const blind=hasMod(data,"blind");
+  const scrambledForBar=hasMod(data,"scrambled");
   const duel=d("duel");
   [me,opp].forEach((p,i)=>{
     const isMe=i===0;
@@ -520,12 +574,24 @@ function renderGame(){
     const pStreak=parseInt(data.players?.[p]?.streak)||0;
     const side=d("pside"+(pTurn?" active":""));
     side.id=isMe?"myside":"oppside";
+    // Activity indicator for opponent
+    const nowTs=Date.now();
+    const pOnline=data.players?.[p]?.online||0;
+    const pGap=nowTs-pOnline;
+    const actDot=el("span",{class:`act-dot ${pGap<30000?"act-green":pGap<120000?"act-yellow":"act-red"}`});
+    const nameRow=d("pname-row",actDot,el("span",{},p));
     side.append(
-      el("div",{class:"pname"},p),
+      nameRow,
       el("div",{class:"pturn",id:isMe?"mypturn":"oppturn"},telepathy?"":""),
       el("div",{class:"pnum",id:isMe?"mypnum":"opppnum"},isMe?`My #: ${data.players?.[me]?.number||"?"}`:"Their #: ???"),
-      el("div",{class:"pranges",id:isMe?"myrange":"opprange"},""),
-      buildRangeBar(isMe?"myrangebar":"opprangebar",data,p,isMe?opp:me,data.min,data.max),
+    );
+    if(!blind){
+      side.append(
+        el("div",{class:"pranges",id:isMe?"myrange":"opprange"},""),
+        buildRangeBar(isMe?"myrangebar":"opprangebar",data,p,isMe?opp:me,data.min,data.max,scrambledForBar)
+      );
+    }
+    side.append(
       el("div",{class:"pguesses",id:isMe?"myguesscount":"oppguesscount"},""),
       el("div",{class:"pscore"},`Wins: ${pScore}`)
     );
@@ -569,10 +635,10 @@ function buildChatPanel(data,me,opp){
   const header=d("chat-header"); header.append(el("span",{},"💬 CHAT"));
   const histBtn=el("button",{class:"chat-hist-btn"},"📋 MY GUESSES");
   const histPop=d("hist-pop"); histPop.id="histpop";
-  histBtn.addEventListener("click",(e)=>{
+    histBtn.addEventListener("click",(e)=>{
     e.stopPropagation();
     if(histPop.classList.contains("open")){histPop.classList.remove("open");return;}
-    histPop.classList.add("open"); renderHistPop(histPop,data,me);
+    histPop.classList.add("open"); renderHistPop(histPop,S.roomData||data,me);
     document.addEventListener("click",()=>histPop.classList.remove("open"),{once:true});
   });
   header.append(histBtn); panel.append(header);
@@ -645,14 +711,17 @@ function renderGuessCard(gc,data,me,opp,myTurn){
   gc.className="gcard"+(myTurn?" my-turn":"");
   const telepathy=hasMod(data,"telepathy");
   const scrambled=hasMod(data,"scrambled");
-  const magic8=hasMod(data,"magic8");
+  const blind=hasMod(data,"blind");
+  const hotcold=hasMod(data,"hotcold");
 
   if(myTurn||telepathy){
     const {lo,hi}=computeRange(data,me,opp,scrambled);
-    const label=magic8?"YOUR TURN — CONSULT THE BALL":"YOUR TURN — GUESS THEIR NUMBER";
-    gc.append(el("div",{class:"gtitle"},label),el("div",{class:"gtarget",id:"grange"},`Possible: ${lo}–${hi}`));
+    const label=hotcold?"YOUR TURN — FEEL THE HEAT":"YOUR TURN — GUESS THEIR NUMBER";
+    gc.append(el("div",{class:"gtitle"},label));
+    if(!blind)gc.append(el("div",{class:"gtarget",id:"grange"},`Possible: ${lo}–${hi}`));
+    else gc.append(el("div",{class:"gtarget blind-mode",id:"grange"},"🙈 Blind mode — no range shown"));
     const ga=d("ga");
-    const gi=el("input",{type:"number",placeholder:`${lo}–${hi}`,id:"gi",min:String(lo),max:String(hi),autocomplete:"off"});
+    const gi=el("input",{type:"number",placeholder:blind?"Enter guess...":`${lo}–${hi}`,id:"gi",min:String(lo),max:String(hi),autocomplete:"off"});
     gi.addEventListener("keydown",e=>{if(e.key==="Enter")submitGuess();});
     gi.addEventListener("input",()=>broadcastTyping(true));
     gi.addEventListener("blur",()=>broadcastTyping(false));
@@ -660,6 +729,13 @@ function renderGuessCard(gc,data,me,opp,myTurn){
     gbtn.addEventListener("click",submitGuess);
     if(telepathy&&telepathyCooldown) gbtn.disabled=true;
     ga.append(gi,gbtn); gc.append(ga);
+    // Last guess display
+    const lgEl=el("div",{id:"last-guess-el",class:"last-guess-info",style:"display:none"});
+    gc.append(lgEl);
+    if(lastGuessInfo){
+      lgEl.textContent=lastGuessInfo.hotLabel?`Last: ${lastGuessInfo.guess} — ${lastGuessInfo.hotLabel}`:`Last: ${lastGuessInfo.guess} — ${lastGuessInfo.result==="higher"?"↑ Higher":"↓ Lower"}`;
+      lgEl.style.display="block";
+    }
     if(telepathy){
       const cdLabel=el("div",{class:"tele-cd"+(telepathyCooldown?" active":""),id:"telecd"},telepathyCooldown?"⏳ 3s cooldown...":"both guessing simultaneously 🫶");
       gc.append(cdLabel);
@@ -803,8 +879,13 @@ function computeRange(data, guesser, target, scrambled=false){
   if(hasMod(data,"shrinking")){
     const allG=data.guesses?Object.values(data.guesses):[];
     const shrinkSteps=Math.floor(allG.length/3);
-    const shrinkAmt=Math.floor((data.max-data.min)*0.1);
-    for(let i=0;i<shrinkSteps;i++){lo=Math.min(lo+shrinkAmt,Math.floor((lo+hi)/2));hi=Math.max(hi-shrinkAmt,Math.ceil((lo+hi)/2));}
+    const shrinkAmt=Math.max(1,Math.floor((data.max-data.min)*0.1));
+    const minFloor=Math.max(5,Math.floor((data.max-data.min)*0.05));
+    for(let i=0;i<shrinkSteps;i++){
+      if(hi-lo<=minFloor)break;
+      lo=Math.min(lo+shrinkAmt,Math.floor((lo+hi)/2)-Math.floor(minFloor/2));
+      hi=Math.max(hi-shrinkAmt,Math.ceil((lo+hi)/2)+Math.ceil(minFloor/2));
+    }
   }
   const guesses=data.guesses?Object.values(data.guesses):[];
   guesses.filter(g=>g.player===guesser).forEach(g=>{
@@ -816,9 +897,9 @@ function computeRange(data, guesser, target, scrambled=false){
   return{lo:Math.max(data.min||1,lo),hi:Math.min(data.max||100,hi)};
 }
 
-function buildRangeBar(id,data,guesser,target,minVal,maxVal){
+function buildRangeBar(id,data,guesser,target,minVal,maxVal,scrambled=false){
   const wrap=d("range-bar-wrap"); wrap.id=id;
-  const {lo,hi}=computeRange(data,guesser,target);
+  const {lo,hi}=computeRange(data,guesser,target,scrambled);
   const total=(maxVal||100)-(minVal||1);
   const pct=total>0?Math.max(5,Math.round(((hi-lo)/total)*100)):100;
   const track=d("range-bar-track"),fill=d("range-bar-fill");
@@ -835,20 +916,21 @@ async function submitGuess(){
   if(!opp)return;
   const telepathy=hasMod(data,"telepathy");
   const scrambled=hasMod(data,"scrambled");
-  const magic8=hasMod(data,"magic8");
   const cupid=hasMod(data,"cupid");
   const drama=hasMod(data,"drama");
   const glitter=hasMod(data,"glitter");
+  const hotcold=hasMod(data,"hotcold");
   if(!telepathy&&data.turn!==S.username)return;
   if(telepathy&&telepathyCooldown)return;
   const input=document.getElementById("gi");
   if(!input)return;
   const guess=parseInt(input.value);
-  if(isNaN(guess)||guess<(data.min||1)||guess>(data.max||100)){
-    SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);return;
-  }
   const allPast=data.guesses?Object.values(data.guesses):[];
   const myPast=allPast.filter(g=>g.player===S.username).map(g=>g.guess);
+  const {lo:validLo,hi:validHi}=computeRange(data,S.username,opp,scrambled);
+  if(isNaN(guess)||guess<validLo||guess>validHi){
+    SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);return;
+  }
   if(myPast.includes(guess)){
     SFX.blocked();input.classList.remove("shake");void input.offsetWidth;input.classList.add("shake");setTimeout(()=>input.classList.remove("shake"),500);
     const existing=document.getElementById("dup-msg");
@@ -858,13 +940,49 @@ async function submitGuess(){
 
   if(cupid)triggerCupidArrow();
   if(glitter){const r=input.getBoundingClientRect();triggerGlitter(r.left+r.width/2,r.top);}
-
   broadcastTyping(false);
+
   const oppNum=data.players[opp].number;
   const trueResult=guess===oppNum?"correct":guess>oppNum?"lower":"higher";
-  // Scrambled: what we show the guesser is swapped (but stored result is real)
-  const storedResult=trueResult; // Store real result for range computation
-  input.value="";
+  const storedResult=trueResult;
+  const displayedResult=scrambled&&trueResult!=="correct"?(trueResult==="higher"?"lower":"higher"):trueResult;
+
+  // Hot & Cold label
+  let hotLabel="";
+  if(hotcold&&trueResult!=="correct"){
+    const range=(data.max||100)-(data.min||1);
+    const dist=Math.abs(guess-oppNum);
+    const pct=dist/range;
+    if(pct<0.05)hotLabel="🌋 BOILING";
+    else if(pct<0.15)hotLabel="🔥 HOT";
+    else if(pct<0.30)hotLabel="😐 WARM";
+    else if(pct<0.50)hotLabel="❄️ COLD";
+    else hotLabel="🥶 FREEZING";
+  }
+
+  // Auto-clear feedback flash
+  if(trueResult==="correct"){input.value="✓ GOT IT!";}
+  else if(hotcold){input.value=hotLabel;}
+  else{input.value=displayedResult==="higher"?"↑ HIGHER":"↓ LOWER";}
+  input.classList.add("guess-feedback","feedback-"+trueResult);
+  setTimeout(()=>{input.value="";input.classList.remove("guess-feedback","feedback-correct","feedback-higher","feedback-lower");},700);
+
+  // Update last guess display
+  lastGuessInfo={guess,result:displayedResult,hotLabel};
+  const lgEl=document.getElementById("last-guess-el");
+  if(lgEl){
+    lgEl.textContent=hotcold?`Last: ${guess} — ${hotLabel}`:`Last: ${guess} — ${displayedResult==="higher"?"↑ Higher":"↓ Lower"}`;
+    lgEl.style.display="block";
+  }
+
+  // Binary search detector
+  if(!hotcold&&myPast.length>=2&&trueResult!=="correct"){
+    const mid=Math.floor((validLo+validHi)/2);
+    if(Math.abs(guess-mid)<=2&&!document.getElementById("bs-toast")){
+      const t=el("div",{id:"bs-toast",class:"bs-toast"},"🤖 Optimal strategy!");
+      document.body.append(t);setTimeout(()=>t.remove(),2500);
+    }
+  }
 
   // Telepathy cooldown
   if(telepathy){
@@ -878,34 +996,26 @@ async function submitGuess(){
       secs--;
       const cl=document.getElementById("telecd");
       if(cl)cl.textContent=secs>0?`⏳ ${secs}s...`:"both guessing simultaneously 🫶";
-      if(secs<=0){
-        clearInterval(cdInterval);
-        telepathyCooldown=false;
-        const gb=document.getElementById("gbtn");
-        if(gb)gb.disabled=false;
-        const cdl=document.getElementById("telecd");
-        if(cdl)cdl.classList.remove("active");
-      }
+      if(secs<=0){clearInterval(cdInterval);telepathyCooldown=false;const gb=document.getElementById("gbtn");if(gb)gb.disabled=false;const cdl=document.getElementById("telecd");if(cdl)cdl.classList.remove("active");}
     },1000);
   }
 
-  if(trueResult==="correct"){SFX.correct();triggerBurst();}
-  else if(trueResult==="higher")SFX.higher();
-  else SFX.lower();
+  if(soundEnabled){
+    if(trueResult==="correct"){SFX.correct();triggerBurst();}
+    else if(trueResult==="higher")SFX.higher();
+    else SFX.lower();
+  } else if(trueResult==="correct"){triggerBurst();}
 
   if(drama&&trueResult!=="correct")triggerDramaFlash(trueResult);
 
-  // For magic8: show cryptic result client-side immediately (the guess still stores real result)
-  if(magic8&&trueResult!=="correct"){
-    let pool=trueResult==="higher"?MAGIC8_HIGHER:MAGIC8_LOWER;
-    if(Math.random()<0.15)pool=MAGIC8_WILD;
-    const msg=pool[Math.floor(Math.random()*pool.length)];
-    const existing=document.getElementById("m8msg");
-    if(!existing){
-      const m=el("div",{id:"m8msg",style:"font-size:11px;color:var(--acc);text-align:center;margin-top:6px;letter-spacing:1px;font-style:italic"},msg);
-      const gc=document.getElementById("guesscard"); if(gc)gc.append(m);
-      setTimeout(()=>m.remove(),3500);
-    }
+  // Hot/Cold in-card bubble
+  if(hotcold&&hotLabel){
+    document.getElementById("hcmsg")?.remove();
+    const hcC={["🌋 BOILING"]:["#ff4400","Boiling"],["🔥 HOT"]:["#ff8800","Hot"],["😐 WARM"]:["#ffaa44","Warm"],["❄️ COLD"]:["#88bbff","Cold"],["🥶 FREEZING"]:["#bbddff","Freezing"]};
+    const [col]=hcC[hotLabel]||["var(--acc)"];
+    const m=el("div",{id:"hcmsg",style:`font-size:22px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:3px;color:${col};text-align:center;margin-top:6px;animation:fi .3s ease`},hotLabel);
+    const gc=document.getElementById("guesscard");if(gc)gc.append(m);
+    setTimeout(()=>m.remove(),3500);
   }
 
   await fbPush(`/duels/${S.roomCode}/guesses`,{player:S.username,guess,result:storedResult,ts:Date.now()});
@@ -917,9 +1027,12 @@ async function submitGuess(){
     const myG=allGuesses.filter(g=>g.player===S.username).length+1;
     const oppG=allGuesses.filter(g=>g.player===opp).length;
     const isLucky=myG===1;
+    let isSeriesWinner=false;
+    if(data.bestOf && newScore>=data.bestOf) isSeriesWinner=true;
     await fbPush(`/duels/${S.roomCode}/roundHistory`,{round:S.round,winner:S.username,myGuesses:myG,oppGuesses:oppG,myNum:data.players[S.username].number,oppNum:data.players[opp].number});
     await fbUpdate(`/duels/${S.roomCode}`,{
       status:"finished",winner:S.username,winnerStreak:newStreak,luckyShot:isLucky||null,
+      seriesWinner:isSeriesWinner?S.username:null,
       [`players/${S.username}/score`]:newScore,[`players/${S.username}/streak`]:newStreak,[`players/${opp}/streak`]:0,
     });
   } else {
@@ -938,10 +1051,14 @@ function renderWinner(){
   const winnerStreak=data.winnerStreak||1;
   const myNum=data.players?.[me]?.number,oppNum=data.players?.[opp]?.number;
   const allGuesses=data.guesses?Object.values(data.guesses):[];
-  const myGuessCnt=allGuesses.filter(g=>g.player===me).length;
-  const oppGuessCnt=allGuesses.filter(g=>g.player===opp).length;
+  const seriesWinner=data.seriesWinner;
+  const isSeriesOver=!!seriesWinner;
 
-  screen.append(d("gh",el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},"GUESSR 💕"),el("div",{class:"rnd"},`ROUND ${S.round}`)));
+  if(isSeriesOver){
+    screen.append(d("gh",el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},"SERIES OVER"),el("div",{class:"winner-name",style:"color:var(--acc)"},seriesWinner===me?"YOU WON THE SERIES!":`${seriesWinner.toUpperCase()} WON THE SERIES!`)));
+  } else {
+    screen.append(d("gh",el("div",{class:"logo",style:"font-size:24px;letter-spacing:4px"},isMe?"YOU WIN!":"YOU LOSE..."),el("div",{class:"winner-name",style:"color:"+(isMe?"var(--acc)":"var(--mut)")},isMe?"VICTORY 💕":winner.toUpperCase()+" WINS")));
+  }
 
   if(data.luckyShot&&isMe){
     const lucky=d("lucky-hero");
@@ -990,10 +1107,17 @@ function renderWinner(){
   });
   sumCard.append(sb);
 
-  if(S.isHost){
-    sumCard.append(el("button",{class:"btn rematch-btn",style:"margin-top:14px",onClick:nextRound},"💕 REMATCH"),el("button",{class:"btn bs",onClick:leaveRoom},"END GAME"));
+  if(isSeriesOver && S.isHost){
+    sumCard.append(el("button",{class:"btn rematch-btn",style:"margin-top:14px",onClick:()=>{
+      S.round=0; Object.keys(S.roomData.players).forEach(p=>{
+        fbUpdate(`/duels/${S.roomCode}/players/${p}`,{score:0,streak:0});
+      });
+      nextRound();
+    }},"💕 PLAY NEW SERIES"),el("button",{class:"btn bs",onClick:leaveRoom},"LEAVE ROOM"));
+  } else if(S.isHost){
+    sumCard.append(el("button",{class:"btn rematch-btn",style:"margin-top:14px",onClick:nextRound},"💕 NEXT ROUND"),el("button",{class:"btn bs",onClick:leaveRoom},"END GAME"));
   } else {
-    sumCard.append(el("div",{style:"text-align:center;color:var(--mut);font-size:12px;margin-top:16px"},"Waiting for host to start rematch... 💕"));
+    sumCard.append(el("div",{style:"text-align:center;color:var(--mut);font-size:12px;margin-top:16px"},"Waiting for host to continue... 💕"));
   }
   screen.append(sumCard);
 
@@ -1020,7 +1144,7 @@ async function nextRound(){
   const players=Object.keys(data.players||{});
   const playerReset={};
   players.forEach(p=>{playerReset[`players/${p}/number`]=null;playerReset[`players/${p}/ready`]=false;});
-  lastReactionCount=0;lastTypingState=false;lastChatCount=0;
+  lastReactionCount=0;lastTypingState=false;lastChatCount=0;lastGuessInfo=null;hasUsedComeback=false;
   const newPool=pickModifiers(S.roomCode+(S.round+1)).map(m=>m.id);
   await fbUpdate(`/duels/${S.roomCode}`,{
     status:"picking",winner:null,winnerStreak:null,luckyShot:null,guesses:null,turn:null,
@@ -1031,10 +1155,17 @@ async function nextRound(){
 
 async function leaveRoom(){
   stopPolling();broadcastTyping(false);
-  if(S.isHost)await fbDelete(`/duels/${S.roomCode}`);
-  else await fbDelete(`/duels/${S.roomCode}/players/${S.username}`);
-  Object.assign(S,{screen:"home",roomCode:"",isHost:false,roomData:null,round:1});
-  lastReactionCount=0;lastTypingState=false;roundHistory=[];lastChatCount=0;
+  if(S.isHost){
+    await fbDelete(`/duels/${S.roomCode}`);
+  } else {
+    const st=S.roomData?.status;
+    if(st==="playing"||st==="modifiers"||st==="picking"){
+      await fbUpdate(`/duels/${S.roomCode}`,{status:"abandoned",abandonedBy:S.username});
+    }
+    await fbDelete(`/duels/${S.roomCode}/players/${S.username}`);
+  }
+  Object.assign(S,{screen:"home",roomCode:"",isHost:false,roomData:null,round:1,bestOf:null});
+  lastReactionCount=0;lastTypingState=false;roundHistory=[];lastChatCount=0;lastGuessInfo=null;hasUsedComeback=false;
   removeVisualMods();render();
 }
 

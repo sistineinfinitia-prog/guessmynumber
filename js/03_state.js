@@ -1,18 +1,15 @@
 // ── STATE ─────────────────────────────────────────────────────
-let pollTimer=null, lastHash="", lastReactionCount=0;
+let pollTimer=null, heartbeatTimer=null, lastHash="", lastReactionCount=0;
 let typingTimer=null, lastTypingState=false;
 let roundHistory=[], lastChatCount=0;
 let telepathyCooldown=false, telepathyCdTimer=null;
+let lastGuessInfo=null, hasUsedComeback=false, soundEnabled=true;
 
-let S={screen:"home",username:"",roomCode:"",isHost:false,roomData:null,round:1};
+let S={screen:"home",username:"",roomCode:"",isHost:false,roomData:null,round:1,bestOf:null};
 
 const TAUNT_PRESETS=["not even close 💀","getting warmer 🔥","you'll never get it 😏","try harder babe 💅","lucky guess? 😤","I'm in your head 🧠","skill issue 💅","touch grass first 🌿"];
 const EMOJI_LIST=["❤️","😤","💀","🫦","😏","🔥","💅","😘"];
 const CHAT_EMOJIS=["💬","💕","✨","🌸","💭","🗨️","😏","❤️"];
-
-const MAGIC8_HIGHER=["The stars say... higher 🔮","Look within... and go up","Concentrate and go higher","Signs point up ✨","Without a doubt — higher","Reply hazy, try higher"];
-const MAGIC8_LOWER=["The mists say... lower 🌫️","As I see it — lower","All signs point down","Cannot predict, but go lower","It is certain... lower","My sources say lower 🎱"];
-const MAGIC8_WILD=["Ask again later 🎱","Better not tell you now","Concentrate and ask again"];
 
 // ── MODIFIER DEFINITIONS ──────────────────────────────────────
 const VISUAL_MODS = [
@@ -21,7 +18,7 @@ const VISUAL_MODS = [
   { id:"sakura", icon:"🌸", name:"Sakura", type:"visual",
     desc:"Heart particles become falling pink cherry blossoms. Soft, floaty, and way prettier." },
   { id:"cupid", icon:"💘", name:"Cupid's Arrow", type:"visual",
-    desc:"Every guess fires a little arrow animation shooting across the screen. Unavoidable." },
+    desc:"Every guess fires 10 arrows shooting across the screen. Unavoidable chaos." },
   { id:"colorflip", icon:"🎨", name:"Color Flip", type:"visual",
     desc:"The entire UI inverts to a light cream theme. Pink stays pink. Everything else is reversed." },
   { id:"retro", icon:"📺", name:"Retro CRT", type:"visual",
@@ -29,24 +26,30 @@ const VISUAL_MODS = [
   { id:"glitter", icon:"✨", name:"Glitter", type:"visual",
     desc:"Every guess, chat message, or emoji fires a sparkle burst at the point of interaction." },
   { id:"letter", icon:"💌", name:"Love Letter", type:"visual",
-    desc:"Parchment texture, cursive/serif headings, cream and brown palette. Like writing by candlelight." },
+    desc:"Warm candlelight palette, cursive headings, rich amber and brown tones. Cozy and romantic." },
   { id:"violet", icon:"💜", name:"Violet Bloom", type:"visual",
     desc:"Full purple color scheme overhaul — lavender petals, violet accents, deep indigo background." },
   { id:"drama", icon:"🎭", name:"Drama", type:"visual",
     desc:"Every higher/lower result triggers a full-screen flash and a brutal screen shake. Extremely dramatic." },
   { id:"rainbow", icon:"🌈", name:"Rainbow", type:"visual",
     desc:"The entire UI slowly hue-shifts through the spectrum. Everything cycles every 8 seconds." },
+  { id:"neon", icon:"💡", name:"Neon", type:"visual",
+    desc:"Electric neon glow on everything. Cyan/magenta borders pulse with light. Dark background, pure electric vibes." },
+  { id:"heartbeat", icon:"💓", name:"Heartbeat", type:"visual",
+    desc:"The game card pulses rhythmically like a heartbeat. Every 1.5 seconds — boom, boom." },
 ];
 
 const GAMEPLAY_MODS = [
   { id:"scrambled", icon:"🔀", name:"Scrambled", type:"gameplay",
     desc:"Higher and lower responses are SWAPPED. Everything you know is wrong. Good luck." },
   { id:"peek", icon:"👁️", name:"Peek", type:"gameplay",
-    desc:"Before guessing, you see 3 number ranges — 2 wrong, 1 containing the answer. It's a clue, not a gift." },
+    desc:"A one-time hint button reveals 3 number ranges — 2 wrong, 1 containing the answer. Use it wisely." },
   { id:"telepathy", icon:"🫶", name:"Telepathy", type:"gameplay",
     desc:"No turns — both players guess simultaneously. 3-second cooldown per guess. First correct wins." },
-  { id:"magic8", icon:"🎱", name:"Magic 8-Ball", type:"gameplay",
-    desc:"Instead of higher/lower, you get cryptic vague responses. The ball knows. Maybe." },
+  { id:"hotcold", icon:"🌡️", name:"Hot & Cold", type:"gameplay",
+    desc:"No higher/lower — you get Freezing / Cold / Warm / Hot / Boiling based on distance from the number." },
+  { id:"blind", icon:"🙈", name:"Blind", type:"gameplay",
+    desc:"Your guess history is completely hidden. No ranges shown. You have to remember everything yourself." },
   { id:"secret", icon:"🤫", name:"Secret Agent", type:"gameplay",
     desc:"Chat, taunts, and emojis are fully disabled. No communication. Pure cold silence." },
   { id:"shrinking", icon:"📉", name:"Shrinking", type:"gameplay",

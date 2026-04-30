@@ -31,6 +31,23 @@ body {
   overflow-x: hidden;
 }
 
+.ping-display {
+  font-size: 9px;
+  color: var(--mut);
+  font-family: 'DM Mono', monospace;
+  pointer-events: none;
+  display: inline-block;
+  letter-spacing: 1px;
+  margin-right: 8px;
+  transition: all .2s;
+}
+.ping-display.high-ping {
+  color: var(--red);
+  text-shadow: 0 0 8px rgba(255,51,88,0.3);
+}
+
+.gh-right { display: flex; align-items: center; }
+
 /* ── DYNAMIC BACKGROUND ── */
 .hearts-bg {
   position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
@@ -167,7 +184,7 @@ input::placeholder { color: var(--mut); }
 .mod-screen-title { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 32px; letter-spacing: 4px; color: var(--acc); }
 .mod-screen-sub { font-size: 10px; color: var(--mut); letter-spacing: 2px; margin-top: 3px; }
 
-.mod-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.mod-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 
 .mod-card {
   background: rgba(26,10,16,0.9); border: 1px solid var(--brd); border-radius: 12px;
@@ -440,9 +457,9 @@ body.mod-midnight input, body.mod-midnight .chat-bubble, body.mod-midnight .gtit
 body.mod-colorflip { --bg:#fff5f7; --sur:#ffe8f0; --sur2:#ffd6e7; --brd:#ffb3cc; --txt:#3d0a15; --mut:#9e6070; --cream:#3d0a15; }
 body.mod-colorflip input { color: var(--txt); background: #fff; }
 
-body.mod-letter { --bg:#f5f0e8; --sur:#ede5d8; --sur2:#e0d4c0; --brd:#c8b89a; --txt:#3d2a1a; --mut:#8a7060; --cream:#3d2a1a; }
-body.mod-letter .logo, body.mod-letter .winner-name, body.mod-letter .pname, body.mod-letter .ctitle { font-family: 'Playfair Display', Georgia, serif; font-style: italic; }
-body.mod-letter input { color: var(--txt); background: rgba(255,255,255,0.6); }
+body.mod-letter { --bg:#1a1008; --sur:#251810; --sur2:#2e1e12; --brd:#7a5c3a; --txt:#f0dcc0; --mut:#9a7c5a; --cream:#f0dcc0; --acc:#e8a84a; --acc2:#f0c070; --rose:#c87040; --grn:#e8a84a; }
+body.mod-letter .logo, body.mod-letter .winner-name, body.mod-letter .ctitle { font-family: 'Playfair Display', Georgia, serif; font-style: italic; }
+body.mod-letter input { color: var(--txt); background: rgba(37,24,16,0.9); }
 
 body.mod-violet { --acc:#b06eff; --acc2:#cc99ff; --rose:#7c3aed; --blu:#d4a8ff; --brd:#3d1a60; --sur:#1a0a30; --sur2:#220d40; --bg:#0a0518; --deep:#4a1a8a; --grn:#b06eff; }
 
@@ -456,10 +473,120 @@ body.mod-rainbow { animation: rainbowHue 8s linear infinite; }
 
 body.mod-sakura .heart-particle { font-style: normal; }
 
+/* ── NEON MOD ── */
+body.mod-neon { --bg:#050015; --sur:#0a0028; --sur2:#0f0035; --brd:#00ffff; --acc:#00ffff; --acc2:#ff00ff; --txt:#e0ffff; --mut:#007777; --rose:#ff00aa; --grn:#00ffaa; }
+body.mod-neon .logo { text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; color: #00ffff; }
+body.mod-neon .gcard.my-turn, body.mod-neon .pside.active { box-shadow: 0 0 20px rgba(0,255,255,0.3), 0 0 0 1px #00ffff inset; }
+body.mod-neon .gbtn { background: #00ffff; color: #050015; }
+body.mod-neon .btn.bp { background: #00ffff; color: #050015; }
+
+/* ── HEARTBEAT MOD ── */
+body.mod-heartbeat .gcard { animation: heartbeatPulse 1.5s ease-in-out infinite; }
+@keyframes heartbeatPulse {
+  0%,100%{transform:scale(1)}
+  14%{transform:scale(1.012)}
+  28%{transform:scale(1)}
+  42%{transform:scale(1.018)}
+  70%{transform:scale(1)}
+}
+
+/* ── PEEK POPUP ── */
+.peek-action-btn {
+  width:100%; padding:12px; font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:15px; letter-spacing:3px; border:2px solid var(--acc);
+  background:rgba(255,107,157,0.12); color:var(--acc); border-radius:8px;
+  cursor:pointer; transition:all .2s; margin-bottom:10px;
+  animation:peekPulse 2s ease-in-out infinite;
+}
+.peek-action-btn:hover { background:rgba(255,107,157,0.22); transform:translateY(-1px); }
+.peek-action-btn.used { opacity:0.45; border-color:var(--mut); color:var(--mut); animation:none; cursor:default; }
+@keyframes peekPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,107,157,0)} 50%{box-shadow:0 0 0 6px rgba(255,107,157,0.15)} }
+.peek-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:500;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  animation:fi .2s ease;
+}
+.peek-box {
+  background:var(--sur); border:1px solid var(--acc); border-radius:12px;
+  padding:24px; max-width:340px; width:100%; text-align:center;
+  box-shadow:0 0 40px rgba(255,107,157,0.25);
+}
+.peek-box-title { font-family:'Bebas Neue',Impact,sans-serif; font-size:14px; letter-spacing:3px; color:var(--acc); margin-bottom:16px; }
+.peek-close-btn {
+  margin-top:16px; width:100%; padding:10px; background:var(--acc); color:#0f0508;
+  border:none; border-radius:6px; font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:16px; letter-spacing:2px; cursor:pointer; transition:all .15s;
+}
+.peek-close-btn:hover { background:var(--acc2); }
+
+/* ── ACTIVITY DOTS ── */
+.pname-row { display:flex; align-items:center; gap:5px; font-family:'Bebas Neue',Impact,sans-serif; font-size:18px; letter-spacing:2px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.act-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; display:inline-block; }
+.act-green { background:#4ade80; box-shadow:0 0 6px rgba(74,222,128,0.6); animation:pulse 2s infinite; }
+.act-yellow { background:#fbbf24; box-shadow:0 0 6px rgba(251,191,36,0.5); }
+.act-red { background:#f87171; }
+
+/* ── SOUND TOGGLE ── */
+.sound-toggle {
+  background:none; border:none; font-size:14px; cursor:pointer;
+  padding:2px 4px; border-radius:4px; line-height:1; transition:opacity .15s;
+  margin-right:6px; opacity:0.6;
+}
+.sound-toggle:hover { opacity:1; }
+
+/* ── LAST GUESS DISPLAY ── */
+.last-guess-info {
+  font-size:10px; color:var(--mut); text-align:center; letter-spacing:1px;
+  margin-top:5px; padding:3px 8px; border-radius:4px;
+  background:rgba(255,107,157,0.06); font-family:'DM Mono',monospace;
+}
+
+/* ── GUESS FEEDBACK FLASH ── */
+.guess-feedback { pointer-events:none; font-family:'Bebas Neue',Impact,sans-serif !important; font-size:16px !important; letter-spacing:2px !important; text-align:center; transition:none; }
+.feedback-higher { background:rgba(255,107,157,0.18) !important; color:var(--acc) !important; border-color:var(--acc) !important; }
+.feedback-lower  { background:rgba(255,51,88,0.18) !important; color:var(--red) !important; border-color:var(--red) !important; }
+.feedback-correct{ background:rgba(74,222,128,0.2) !important; color:#4ade80 !important; border-color:#4ade80 !important; }
+
+/* ── BLIND MODE ── */
+.gtarget.blind-mode { color:var(--mut); font-size:12px; letter-spacing:1px; font-family:'DM Mono',monospace; }
+
+/* ── BINARY SEARCH TOAST ── */
+.bs-toast {
+  position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+  background:rgba(74,222,128,0.15); border:1px solid rgba(74,222,128,0.4);
+  color:#4ade80; font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px;
+  padding:7px 16px; border-radius:20px; z-index:9999; white-space:nowrap;
+  animation:admToastIn .2s ease, admToastOut .3s ease 2.2s forwards;
+}
+
+/* ── SHARE BUTTON ── */
+.share-row { display:flex; justify-content:center; margin-bottom:12px; }
+.share-btn {
+  background:var(--sur2); border:1px solid var(--brd); color:var(--mut);
+  font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px;
+  padding:6px 16px; border-radius:20px; cursor:pointer; transition:all .15s;
+}
+.share-btn:hover { border-color:var(--acc); color:var(--acc); }
+
+/* ── MOBILE BREAKPOINTS ── */
+@media (max-width: 768px) {
+  .mod-grid { grid-template-columns: repeat(2, 1fr); }
+  .duel { gap: 8px; }
+}
 @media (max-width: 500px) {
-  .screen{padding:8px} .logo{font-size:46px} .duel{gap:6px} .pside{padding:10px 8px}
-  .pname{font-size:15px} .card{padding:14px} .presets{grid-template-columns:repeat(2,1fr)}
+  .screen{padding:8px} .logo{font-size:42px} .duel{gap:6px} .pside{padding:10px 8px}
+  .pname-row{font-size:14px} .card{padding:14px} .presets{grid-template-columns:repeat(2,1fr)}
   .emoji-bar{gap:4px;padding:5px 8px} .emoji-btn{font-size:17px} .summary-grid{gap:6px}
-  .winner-name{font-size:44px} .winner-trophy-anim{font-size:56px} .chat-feed{height:120px}
-  .mod-grid{grid-template-columns:1fr 1fr} .mod-card{padding:10px 8px}
+  .winner-name{font-size:44px} .winner-trophy-anim{font-size:56px} .chat-feed{height:110px}
+  .mod-grid{grid-template-columns:repeat(2,1fr)} .mod-card{padding:9px 7px} .mod-icon{font-size:24px} .mod-name{font-size:13px}
+  .btn{padding:13px;font-size:16px;min-height:44px} .gbtn{padding:12px 14px;min-height:44px}
+  .ga input{font-size:16px} .cdisp{font-size:38px;letter-spacing:8px}
+  .chat-input-row{gap:4px} .chat-send{padding:7px 8px;font-size:12px}
+  .peek-action-btn{font-size:13px;padding:10px}
+}
+@media (max-width: 380px) {
+  .mod-grid{grid-template-columns:1fr 1fr}
+  .duel{grid-template-columns:1fr 1fr}
+  .ga{flex-wrap:wrap} .ga input{width:100%;flex:none} .gbtn{width:100%;min-height:48px}
+  .presets{grid-template-columns:repeat(2,1fr)}
 }

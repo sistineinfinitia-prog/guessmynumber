@@ -231,9 +231,12 @@
     // Solo-start: fake opponent so host can bypass waiting
     body.appendChild(mkBtn("SOLO START (add bot)", async ()=>{
       if(!S.roomCode){ toast("⚠ not in a room"); return; }
+      const data = await fbGet(`/duels/${S.roomCode}`);
       const botName = "DebugBot";
-      await fbUpdate(`/duels/${S.roomCode}/players/${botName}`, {score:0, ready:true, streak:0, online:Date.now()});
-      toast(`✓ added ${botName}`);
+      const min=data?.min||1, max=data?.max||100;
+      const botNum=min+Math.floor(Math.random()*(max-min+1));
+      await fbUpdate(`/duels/${S.roomCode}/players/${botName}`, {score:0, ready:true, streak:0, online:Date.now(), number:botNum});
+      toast(`✓ added ${botName} (secret # = ${botNum})`);
     }));
 
     // Force status

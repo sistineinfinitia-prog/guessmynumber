@@ -45,11 +45,15 @@ function triggerBurst(){
 
 function triggerCupidArrow(){
   const layer=document.getElementById("arrowLayer");
-  const a=document.createElement("div"); a.className="cupid-arrow";
-  const y=20+Math.random()*60;
-  a.style.cssText=`top:${y}%;left:0;animation-duration:${0.7+Math.random()*0.4}s;`;
-  a.textContent="💘";
-  layer.append(a); setTimeout(()=>a.remove(),1500);
+  for(let i=0;i<10;i++){
+    const a=document.createElement("div"); a.className="cupid-arrow";
+    const y=5+Math.random()*90;
+    const dur=0.55+Math.random()*0.5;
+    const delay=Math.random()*0.5;
+    a.style.cssText=`top:${y}%;left:0;animation-duration:${dur}s;animation-delay:${delay}s;font-size:${20+Math.random()*16}px;`;
+    a.textContent="💘";
+    layer.append(a); setTimeout(()=>a.remove(),2000);
+  }
 }
 
 function triggerDramaFlash(type){

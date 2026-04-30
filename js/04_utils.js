@@ -31,7 +31,7 @@ function hasMod(data, id){
 
 function applyVisualMods(data){
   const mods=getActiveModifiers(data);
-  const allModClasses=["mod-midnight","mod-sakura","mod-cupid","mod-colorflip","mod-retro","mod-glitter","mod-letter","mod-violet","mod-drama","mod-rainbow"];
+  const allModClasses=["mod-midnight","mod-sakura","mod-cupid","mod-colorflip","mod-retro","mod-glitter","mod-letter","mod-violet","mod-drama","mod-rainbow","mod-neon","mod-heartbeat"];
   allModClasses.forEach(c=>document.body.classList.remove(c));
   mods.forEach(m=>document.body.classList.add("mod-"+m));
   if(mods.includes("sakura")){
@@ -42,7 +42,7 @@ function applyVisualMods(data){
 }
 
 function removeVisualMods(){
-  ["mod-midnight","mod-sakura","mod-cupid","mod-colorflip","mod-retro","mod-glitter","mod-letter","mod-violet","mod-drama","mod-rainbow"].forEach(c=>document.body.classList.remove(c));
+  ["mod-midnight","mod-sakura","mod-cupid","mod-colorflip","mod-retro","mod-glitter","mod-letter","mod-violet","mod-drama","mod-rainbow","mod-neon","mod-heartbeat"].forEach(c=>document.body.classList.remove(c));
   heartSpawnSymbols=["♥","♡","💕","❤","✦","🌸","✿","·","♥","♡"];
 }
 
@@ -56,8 +56,8 @@ function pickModifiers(roomCode){
     for(let i=a.length-1;i>0;i--){ const j=seededRand(i+1); [a[i],a[j]]=[a[j],a[i]]; }
     return a;
   }
-  const vis=shuffle(VISUAL_MODS).slice(0,2);
-  const gp=shuffle(GAMEPLAY_MODS).slice(0,2);
+  const vis=shuffle(VISUAL_MODS).slice(0,3);
+  const gp=shuffle(GAMEPLAY_MODS).slice(0,3);
   return [...vis,...gp];
 }
 
