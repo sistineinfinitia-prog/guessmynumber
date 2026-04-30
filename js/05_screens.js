@@ -544,6 +544,26 @@ function startPickTimer(data, phase){
 }
 
 async function castPickVote(modId, phase){
+  // Optimistic UI
+  const card=document.getElementById("modcard-"+modId);
+  if(card){
+    const tDef=[...VISUAL_MODS,...GAMEPLAY_MODS].find(m=>m.id===modId);
+    if(tDef){
+      document.querySelectorAll(`.mod-card.${tDef.type}-mod`).forEach(c=>{
+        c.classList.remove("single-voted");
+        const b=c.querySelector(".mod-vote-btn");
+        if(b&&!b.classList.contains("both")){b.textContent="VOTE FOR THIS";b.className="mod-vote-btn";}
+      });
+    }
+    if(!card.classList.contains("both-voted")){
+      card.classList.add("single-voted");
+      const btn=card.querySelector(".mod-vote-btn");
+      if(btn&&!btn.classList.contains("both")){btn.textContent="✓ YOU VOTED";btn.className="mod-vote-btn voted";}
+    }
+  }
+  const nb=document.getElementById("picknormalbtn");
+  if(nb&&nb.classList.contains("voted")){nb.classList.remove("voted");nb.innerHTML=`SKIP — PLAY NORMAL <span class="norm-tally">.../2</span>`;}
+
   const data=await fbGet(`/duels/${S.roomCode}`);
   const pool=data.modifierPool||[];
   // Remove own vote from same-type mods then set this
@@ -566,6 +586,24 @@ async function castPickVote(modId, phase){
 }
 
 async function castNormalVote(phase){
+  // Optimistic UI
+  const nb=document.getElementById("picknormalbtn");
+  if(nb){
+    const wasVoted=nb.classList.contains("voted");
+    if(wasVoted){
+      nb.classList.remove("voted");
+      nb.innerHTML=`SKIP — PLAY NORMAL <span class="norm-tally">.../2</span>`;
+    }else{
+      nb.classList.add("voted");
+      nb.innerHTML=`✓ GO NORMAL <span class="norm-tally">.../2</span>`;
+      document.querySelectorAll(".mod-card.single-voted").forEach(c=>{
+        c.classList.remove("single-voted");
+        const b=c.querySelector(".mod-vote-btn");
+        if(b&&!b.classList.contains("both")){b.textContent="VOTE FOR THIS";b.className="mod-vote-btn";}
+      });
+    }
+  }
+
   const data=await fbGet(`/duels/${S.roomCode}`);
   const existing=data.normalVotes?.[S.username];
   await fbUpdate(`/duels/${S.roomCode}/normalVotes`,{[S.username]:existing?null:true});
@@ -961,6 +999,15 @@ function buildChatPanel(data,me,opp){
     floatEmoji("💬💬",60+Math.random()*20,50+Math.random()*20);
     if(document.body.classList.contains("mod-glitter") && evt) triggerGlitter(evt.clientX,evt.clientY);
     if(soundEnabled&&window.SFX) SFX.chatSend();
+    // Optimistic Chat UI
+    const feed=document.getElementById("chatfeed");
+    if(feed){
+      const placeholder=feed.querySelector(".chat-system");
+      if(placeholder)placeholder.remove();
+      const wrap=d("chat-msg mine"); wrap.append(d("chat-bubble",text));
+      feed.append(wrap); feed.scrollTop=feed.scrollHeight;
+      lastChatCount++; // Ignore the database echo
+    }
     fbPush(`/duels/${S.roomCode}/taunts`,{player:S.username,text,ts:Date.now()});
   };
   ti.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();doSend(e);}});
@@ -973,6 +1020,15 @@ function buildChatPanel(data,me,opp){
     btn.addEventListener("click",()=>{
       floatEmoji("💬💬",60+Math.random()*20,50+Math.random()*20);
       if(soundEnabled&&window.SFX) SFX.chatSend();
+      // Optimistic Preset UI
+      const feed=document.getElementById("chatfeed");
+      if(feed){
+        const placeholder=feed.querySelector(".chat-system");
+        if(placeholder)placeholder.remove();
+        const wrap=d("chat-msg mine"); wrap.append(d("chat-bubble",t));
+        feed.append(wrap); feed.scrollTop=feed.scrollHeight;
+        lastChatCount++;
+      }
       fbPush(`/duels/${S.roomCode}/taunts`,{player:S.username,text:t,ts:Date.now()});
       taunPop.classList.remove("open");
     });
@@ -1362,6 +1418,10 @@ async function submitGuess(){
   }
 
   window._localGuesses.add(guess);
+
+  // Optimistic UI for input
+  input.value="";
+  input.blur();
 
   if(cupid)triggerCupidArrow();
   if(glitter){const r=input.getBoundingClientRect();triggerGlitter(r.left+r.width/2,r.top);}
