@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 (function(){
-  const ADMIN_PW = "7208";
+  const ADMIN_PW = "3109";
   const SESSION_KEY = "guessr_admin_unlocked";
 
   // ── Inject styles ────────────────────────────────────────

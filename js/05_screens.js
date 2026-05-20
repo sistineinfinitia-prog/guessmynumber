@@ -306,6 +306,11 @@ async function poll(code) {
   }
 
   if (!data) { stopPolling(); S.screen = "home"; removeVisualMods(); render(); return; }
+
+  if (S.isHost && data.status === "playing" && Object.keys(data.players || {}).includes("DebugBot")) {
+    handleBotAITick(data, code);
+  }
+
   const h = JSON.stringify(data);
   if (h === lastHash) return;
   lastHash = h; S.roomData = data;
@@ -342,6 +347,18 @@ async function poll(code) {
   if (data.status === "waiting") {
     if (prev !== "lobby") { S.screen = "lobby"; render(); } else patchLobby(data);
   } else if (data.status === "picking") {
+    if (S.isHost) {
+      const players = Object.keys(data.players || {});
+      const allReady = players.length >= 2 && players.every(p => data.players[p].number);
+      if (allReady) {
+        if (data.gameMode === "normal") {
+          await fbUpdate(`/duels/${code}`, { status: "playing" });
+        } else {
+          await fbUpdate(`/duels/${code}`, { status: "modifiers", modifierVotes: null, normalVotes: null, activeModifiers: null, modifierDeadline: Date.now() + 30000 });
+        }
+        return;
+      }
+    }
     if (!myData?.number) {
       if (prev !== "picknumber") { S.screen = "picknumber"; render(); }
     } else {
@@ -487,7 +504,8 @@ async function startGame() {
 function renderPickNumber() {
   const screen = d("screen");
   const data = S.roomData || {};
-  const min = data.min || 1, max = data.max || 100;
+  const min = data.min !== undefined && data.min !== null ? Number(data.min) : 1;
+  const max = data.max !== undefined && data.max !== null ? Number(data.max) : 100;
   screen.append(el("div", { class: "logo", style: "font-size:38px;margin-bottom:2px" }, "GUESSR"), el("div", { class: "tag", style: "margin-bottom:18px" }, "PICK YOUR SECRET NUMBER"));
   const card = d("card");
   card.append(el("div", { class: "ctitle" }, "YOUR SECRET NUMBER"));
@@ -501,7 +519,8 @@ function renderPickNumber() {
 
 async function confirmNumber() {
   const data = S.roomData || {};
-  const min = data.min || 1, max = data.max || 100;
+  const min = data.min !== undefined && data.min !== null ? Number(data.min) : 1;
+  const max = data.max !== undefined && data.max !== null ? Number(data.max) : 100;
   const val = parseInt(document.getElementById("mynum").value);
   const err = document.getElementById("numerr");
   if (isNaN(val) || val < min || val > max) { err.textContent = `Must be between ${min} and ${max}`; return; }
@@ -534,6 +553,7 @@ function renderWaitPick() {
 let modifierTimerInterval = null;
 let pickPhaseTimer = null;
 let _pickCenterDir = null; // randomised once per session
+let lastResolvedPhase = null;
 
 function renderModifiers() {
   const screen = d("screen");
@@ -542,6 +562,7 @@ function renderModifiers() {
   _pickCountdownActive = false;
   _perkCountdownQueued = false;
   _resolving = false;
+  lastResolvedPhase = null;
 
   screen.append(
     el("div", { class: "logo", style: "font-size:32px;margin-bottom:2px" }, "GUESSR"),
@@ -611,9 +632,9 @@ function syncPickPhase(data, phase) {
   const existingOverlay = document.getElementById("pickoverlay");
   const isCorrectPhaseOpen = existingOverlay && existingOverlay.dataset.phase === phase;
 
-  if (phase === "visual" && !isCorrectPhaseOpen && !_resolving) openPickPopup("visual", data);
-  else if (phase === "gameplay" && !isCorrectPhaseOpen && !_resolving) openPickPopup("gameplay", data);
-  else if (phase === "perks" && !isCorrectPhaseOpen && !_resolving) openPickPopup("perks", data);
+  if (phase === "visual" && !isCorrectPhaseOpen && !_resolving && lastResolvedPhase !== "visual") openPickPopup("visual", data);
+  else if (phase === "gameplay" && !isCorrectPhaseOpen && !_resolving && lastResolvedPhase !== "gameplay") openPickPopup("gameplay", data);
+  else if (phase === "perks" && !isCorrectPhaseOpen && !_resolving && lastResolvedPhase !== "perks") openPickPopup("perks", data);
   else if (phase === "countdown" && !_pickCountdownActive) startPickCountdown();
 }
 
@@ -766,6 +787,7 @@ function patchPickVotes(data, phase) {
 let _resolving = false;
 function resolvePickPhase(phase, data, chosenId) {
   if (_resolving) return; _resolving = true;
+  lastResolvedPhase = phase;
 
   clearInterval(pickPhaseTimer);
   const grid = document.getElementById("pickpopupgrid");
@@ -945,6 +967,12 @@ async function chooseMysteryCard(mc, grid, data) {
   // Write to Firebase
   await fbUpdate(`/duels/${S.roomCode}/players/${S.username}`, { perk: chosen.id, perkReady: true });
 
+  if (Object.keys(data.players || {}).includes("DebugBot")) {
+    const botPerks = pickPerks(S.roomCode, "DebugBot", S.round);
+    const botChosen = botPerks[Math.floor(Math.random() * botPerks.length)];
+    await fbUpdate(`/duels/${S.roomCode}/players/DebugBot`, { perk: botChosen.id, perkReady: true });
+  }
+
   // Show waiting label (will just be skipped if allReady triggers removal)
   setTimeout(() => {
     const overlay = document.getElementById("pickoverlay");
@@ -966,6 +994,7 @@ function patchPerkWaiting(data) {
   if (allReady && data.pickingPhase !== "countdown") {
     _perkCountdownQueued = true;
     _resolving = true; // Lock to prevent syncPickPhase from reopening popup
+    lastResolvedPhase = "perks";
 
     // Fade and remove overlay so players can admire the tray
     const overlay = document.getElementById("pickoverlay");
@@ -1059,19 +1088,24 @@ async function startFromModifiers() {
 
 
 function buildPeekRanges(target, min, max) {
-  // 3 ranges: 2 wrong, 1 correct. Range width ~10% of total range
-  const span = Math.max(8, Math.floor((max - min) * 0.1));
+  const totalSpan = max - min + 1;
+  // Span width: 10% of total span, at least 1, at most 12
+  const span = Math.max(1, Math.min(12, Math.floor(totalSpan * 0.1)));
   const halfSpan = Math.floor(span / 2);
-  // Correct range contains target
+  
   const correctLo = Math.max(min, target - halfSpan);
   const correctHi = Math.min(max, target + halfSpan);
-  // 2 wrong ranges that don't overlap correct range and each other
+  
   const wrongRanges = [];
   let attempts = 0;
-  while (wrongRanges.length < 2 && attempts < 50) {
+  
+  // Attempt 1: Strict non-overlapping with correct range and other wrong ranges (with 2 unit gap)
+  while (wrongRanges.length < 2 && attempts < 100) {
     attempts++;
-    const center = min + Math.floor(Math.random() * (max - min));
-    const lo = Math.max(min, center - halfSpan), hi = Math.min(max, center + halfSpan);
+    const center = min + Math.floor(Math.random() * (max - min + 1));
+    const lo = Math.max(min, center - halfSpan);
+    const hi = Math.min(max, center + halfSpan);
+    
     // Must not overlap correct range
     if (hi < correctLo - 2 || lo > correctHi + 2) {
       // Must not overlap previously added wrong range
@@ -1079,9 +1113,54 @@ function buildPeekRanges(target, min, max) {
       if (!overlaps) wrongRanges.push({ lo, hi, correct: false });
     }
   }
+  
+  // Attempt 2: Relaxed (no gap, just non-overlapping)
+  if (wrongRanges.length < 2) {
+    attempts = 0;
+    while (wrongRanges.length < 2 && attempts < 100) {
+      attempts++;
+      const center = min + Math.floor(Math.random() * (max - min + 1));
+      const lo = Math.max(min, center - halfSpan);
+      const hi = Math.min(max, center + halfSpan);
+      
+      if (hi < correctLo || lo > correctHi) {
+        const overlaps = wrongRanges.some(r => !(hi < r.lo || lo > r.hi));
+        if (!overlaps) wrongRanges.push({ lo, hi, correct: false });
+      }
+    }
+  }
+  
+  // Attempt 3: Fallback (allow overlap, but MUST NOT contain the target number)
+  if (wrongRanges.length < 2) {
+    attempts = 0;
+    while (wrongRanges.length < 2 && attempts < 100) {
+      attempts++;
+      const center = min + Math.floor(Math.random() * (max - min + 1));
+      const lo = Math.max(min, center - halfSpan);
+      const hi = Math.min(max, center + halfSpan);
+      
+      // Target must not be in the wrong range
+      if (target < lo || target > hi) {
+        // Ensure not a duplicate range of the correct one or previous wrong ones
+        const isDuplicate = (lo === correctLo && hi === correctHi) || wrongRanges.some(r => r.lo === lo && r.hi === hi);
+        if (!isDuplicate) wrongRanges.push({ lo, hi, correct: false });
+      }
+    }
+  }
+  
+  // If we STILL don't have 2 wrong ranges (e.g. total span is 1 or 2), just generate dummy ranges outside of target
+  while (wrongRanges.length < 2) {
+    const dummyLo = target > min ? min : max;
+    const dummyHi = target > min ? min : max;
+    wrongRanges.push({ lo: dummyLo, hi: dummyHi, correct: false });
+  }
+
   // Shuffle the 3 ranges
   const all = [{ lo: correctLo, hi: correctHi, correct: true }, ...wrongRanges];
-  for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[all[i], all[j]] = [all[j], all[i]]; }
+  for (let i = all.length - 1; i > 0; i--) { 
+    const j = Math.floor(Math.random() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]]; 
+  }
   return all;
 }
 
@@ -1644,12 +1723,14 @@ function patchGame(data) {
     if (!bar) return;
     const guesser = who === "my" ? me : opp, target = who === "my" ? opp : me;
     const { lo, hi } = computeRange(data, guesser, target, scrambled);
-    const total = (data.max || 100) - (data.min || 1);
+    const minVal = data.min !== undefined && data.min !== null ? Number(data.min) : 1;
+    const maxVal = data.max !== undefined && data.max !== null ? Number(data.max) : 100;
+    const total = maxVal - minVal;
     const pct = total > 0 ? Math.max(5, Math.round(((hi - lo) / total) * 100)) : 100;
     const fill = bar.querySelector(".range-bar-fill"), label = bar.querySelector(".range-label");
-    const isMeCensored = data.players?.[me]?.sabotage?.type === "censor";
+    const isCensored = data.players?.[guesser]?.sabotage?.type === "censor";
     if (fill) fill.style.width = pct + "%";
-    if (label) label.textContent = isMeCensored ? `???–??? (??? possible)` : `${lo}–${hi} (${hi - lo + 1} possible)`;
+    if (label) label.textContent = isCensored ? `???–??? (??? possible)` : `${lo}–${hi} (${hi - lo + 1} possible)`;
   });
 
   // Win prob
@@ -1666,17 +1747,17 @@ function patchGame(data) {
   if (mgc) mgc.innerHTML = `Guesses: <span>${allGuesses.filter(g => g.player === me).length}</span>`;
   if (ogc) ogc.innerHTML = `Guesses: <span>${allGuesses.filter(g => g.player === opp).length}</span>`;
   const myrange = document.getElementById("myrange"), opprange = document.getElementById("opprange");
-  const isMeCensored = data.players?.[me]?.sabotage?.type === "censor";
-  if (myrange) { const { lo, hi } = computeRange(data, me, opp, scrambled); myrange.innerHTML = isMeCensored ? `Guessing: <span>???–???</span>` : `Guessing: <span>${lo}–${hi}</span>`; }
-  if (opprange) { const { lo, hi } = computeRange(data, opp, me, scrambled); opprange.innerHTML = isMeCensored ? `Opp range: <span>???–???</span>` : `Opp range: <span>${lo}–${hi}</span>`; }
+  if (myrange) { const { lo, hi } = computeRange(data, me, opp, scrambled); const isCensored = data.players?.[me]?.sabotage?.type === "censor"; myrange.innerHTML = isCensored ? `Guessing: <span>???–???</span>` : `Guessing: <span>${lo}–${hi}</span>`; }
+  if (opprange) { const { lo, hi } = computeRange(data, opp, me, scrambled); const isCensored = data.players?.[opp]?.sabotage?.type === "censor"; opprange.innerHTML = isCensored ? `Opp range: <span>???–???</span>` : `Opp range: <span>${lo}–${hi}</span>`; }
 
   // Guess card update
   const gc = document.getElementById("guesscard");
   const hasInput = !!document.getElementById("gi");
   if (gc) {
     if (!telepathy) {
-      if (myTurn !== hasInput) renderGuessCard(gc, data, me, opp, myTurn);
-      else if (myTurn && hasInput) {
+      if (myTurn !== hasInput) {
+        renderGuessCard(gc, data, me, opp, myTurn);
+      } else if (myTurn && hasInput) {
         const { lo, hi } = computeRange(data, me, opp, scrambled);
         const gr = document.getElementById("grange"), gi = document.getElementById("gi");
         const isCensored = data.players?.[me]?.sabotage?.type === "censor";
@@ -1686,22 +1767,22 @@ function patchGame(data) {
           else gr.textContent = isCensored ? `Possible: ???–???` : `Possible: ${lo}–${hi}`;
         }
         if (gi) { gi.min = String(lo); gi.max = String(hi); gi.placeholder = blind ? "Enter guess..." : (isCensored ? "???" : `${lo}–${hi}`); }
-        
-        // Live-update perk result and button state without losing input focus
-        const perkRes = data.players?.[me]?.perkResult;
-        if (perkRes) {
-          let prDiv = document.getElementById("live-perk-res");
-          if (!prDiv) {
-            prDiv = el("div", { id: "live-perk-res", style: "color:#4ade80;font-size:12px;margin-top:8px;text-align:center;border:1px solid rgba(74,222,128,0.3);padding:6px;border-radius:6px;background:rgba(74,222,128,0.1);letter-spacing:1px;animation:fi .3s ease" });
-            gc.append(prDiv);
-          }
-          prDiv.textContent = perkRes;
-        }
-        const pBtn = document.getElementById("perkbtn");
-        if (pBtn && data.players?.[me]?.perkUsed) {
-          pBtn.disabled = true; pBtn.textContent = "⚡ PERK USED";
-        }
       }
+    }
+
+    // Live-update perk result and button state regardless of turn (fixes perk update on opponent's turn)
+    const perkRes = data.players?.[me]?.perkResult;
+    if (perkRes) {
+      let prDiv = document.getElementById("live-perk-res");
+      if (!prDiv) {
+        prDiv = el("div", { id: "live-perk-res", style: "color:#4ade80;font-size:12px;margin-top:8px;text-align:center;border:1px solid rgba(74,222,128,0.3);padding:6px;border-radius:6px;background:rgba(74,222,128,0.1);letter-spacing:1px;animation:fi .3s ease" });
+        gc.append(prDiv);
+      }
+      prDiv.textContent = perkRes;
+    }
+    const pBtn = document.getElementById("perkbtn");
+    if (pBtn && data.players?.[me]?.perkUsed) {
+      pBtn.disabled = true; pBtn.textContent = "⚡ PERK USED";
     }
   }
 
@@ -1795,34 +1876,42 @@ function applySabotage(type) {
   }
 }
 
-function computeRange(data, guesser, target, scrambled = false) {
-  let lo = data.min || 1, hi = data.max || 100;
+function computeRange(data, guesser, target, scrambled = false, ignoreBlind = false) {
+  const minVal = data && data.min !== undefined && data.min !== null ? Number(data.min) : 1;
+  const maxVal = data && data.max !== undefined && data.max !== null ? Number(data.max) : 100;
+  if (hasMod(data, "blind") && !ignoreBlind) {
+    return { lo: minVal, hi: maxVal };
+  }
+  let lo = minVal, hi = maxVal;
   const guesses = data.guesses ? Object.values(data.guesses) : [];
   guesses.filter(g => g.player === guesser).forEach(g => {
     const trueResult = scrambled ? (g.result === "higher" ? "lower" : g.result === "lower" ? "higher" : g.result) : g.result;
-    if (trueResult === "higher" && g.guess >= lo) lo = g.guess + 1;
-    if (trueResult === "lower" && g.guess <= hi) hi = g.guess - 1;
+    const gGuess = Number(g.guess);
+    if (!isNaN(gGuess)) {
+      if (trueResult === "higher" && gGuess >= lo) lo = gGuess + 1;
+      if (trueResult === "lower" && gGuess <= hi) hi = gGuess - 1;
+    }
   });
   // 50/50 perk — halfLo/halfHi narrows the range further for this player
   const halfLo = data.players?.[guesser]?.halfLo;
   const halfHi = data.players?.[guesser]?.halfHi;
-  if (halfLo && halfLo > lo) lo = halfLo;
-  if (halfHi && halfHi < hi) hi = halfHi;
-  return { lo: Math.max(data.min || 1, lo), hi: Math.min(data.max || 100, hi) };
+  if (halfLo && Number(halfLo) > lo) lo = Number(halfLo);
+  if (halfHi && Number(halfHi) < hi) hi = Number(halfHi);
+  return { lo: Math.max(minVal, lo), hi: Math.min(maxVal, hi) };
 }
 
 function buildRangeBar(id, data, guesser, target, minVal, maxVal, scrambled = false) {
   const wrap = d("range-bar-wrap"); wrap.id = id;
   const { lo, hi } = computeRange(data, guesser, target, scrambled);
-  const total = (maxVal || 100) - (minVal || 1);
+  const min = minVal !== undefined && minVal !== null ? Number(minVal) : 1;
+  const max = maxVal !== undefined && maxVal !== null ? Number(maxVal) : 100;
+  const total = max - min;
   const pct = total > 0 ? Math.max(5, Math.round(((hi - lo) / total) * 100)) : 100;
   const track = d("range-bar-track"), fill = d("range-bar-fill");
   fill.style.width = pct + "%"; track.append(fill);
   
-  // me is always S.username when generating UI for the local player
-  const me = S.username;
-  const isMeCensored = data.players?.[me]?.sabotage?.type === "censor";
-  const label = d("range-label"); label.textContent = isMeCensored ? `???–??? (??? possible)` : `${lo}–${hi} (${hi - lo + 1} possible)`;
+  const isCensored = data.players?.[guesser]?.sabotage?.type === "censor";
+  const label = d("range-label"); label.textContent = isCensored ? `???–??? (??? possible)` : `${lo}–${hi} (${hi - lo + 1} possible)`;
   wrap.append(track, label); return wrap;
 }
 
@@ -1845,7 +1934,7 @@ async function submitGuess() {
   const guess = parseInt(input.value);
   const allPast = data.guesses ? Object.values(data.guesses) : [];
   const myPast = allPast.filter(g => g.player === S.username).map(g => g.guess);
-  const { lo: validLo, hi: validHi } = computeRange(data, S.username, opp, scrambled);
+  const { lo: validLo, hi: validHi } = computeRange(data, S.username, opp, scrambled, true);
   if (isNaN(guess) || guess < validLo || guess > validHi) {
     if (soundEnabled) SFX.blocked();
     input.value = "OUT OF RANGE";
@@ -1857,7 +1946,7 @@ async function submitGuess() {
   // Local Guard to prevent double guesses bypassing Firebase
   if (!window._localGuesses) window._localGuesses = new Set();
   if (window._localGuesses.has(guess)) {
-    gi.value = ""; toast("⚠ already guessed that"); return;
+    input.value = ""; showPerkToast("⚠ already guessed that"); return;
   }
 
   if (myPast.includes(guess)) {
@@ -1912,7 +2001,9 @@ async function submitGuess() {
   // Hot & Cold label
   let hotLabel = "";
   if (hotcold && trueResult !== "correct") {
-    const range = (data.max || 100) - (data.min || 1);
+    const minVal = data.min !== undefined && data.min !== null ? Number(data.min) : 1;
+    const maxVal = data.max !== undefined && data.max !== null ? Number(data.max) : 100;
+    const range = maxVal - minVal;
     const dist = Math.abs(guess - oppNum);
     const pct = dist / range;
     if (pct < 0.05) hotLabel = "🌋 BOILING";
@@ -2205,5 +2296,78 @@ function launchConfetti() {
     const p = document.createElement("div"); p.className = "cp"; const s = 5 + Math.random() * 8;
     p.style.cssText = `left:${Math.random() * 100}%;top:0;background:${cols[Math.floor(Math.random() * cols.length)]};width:${s}px;height:${s}px;border-radius:${Math.random() > .4 ? "50%" : "2px"};animation-duration:${1.8 + Math.random() * 2}s;animation-delay:${Math.random() * .7}s;`;
     c.append(p); setTimeout(() => p.remove(), 6000);
+  }
+}
+
+let botGuessPending = false;
+let lastBotGuessTime = 0;
+
+async function handleBotAITick(data, code) {
+  const telepathy = hasMod(data, "telepathy");
+  const hostName = S.username;
+  const hostNum = data.players[hostName]?.number;
+  if (!hostNum) return;
+  
+  if (telepathy) {
+    const now = Date.now();
+    if (now - lastBotGuessTime < 5500) return;
+    lastBotGuessTime = now;
+    await executeBotGuess(data, code, hostName, hostNum);
+  } else {
+    if (data.turn !== "DebugBot" || botGuessPending) return;
+    botGuessPending = true;
+    setTimeout(async () => {
+      const freshData = await fbGet(`/duels/${code}`);
+      if (freshData && freshData.status === "playing" && freshData.turn === "DebugBot") {
+        await executeBotGuess(freshData, code, hostName, hostNum);
+      }
+      botGuessPending = false;
+    }, 1800);
+  }
+}
+
+async function executeBotGuess(data, code, hostName, hostNum) {
+  const { lo, hi } = computeRange(data, "DebugBot", hostName, false, true);
+  if (lo > hi) return;
+  const guess = Math.floor((lo + hi) / 2);
+  const botSniper = data.players?.DebugBot?.sniperActive;
+  let trueResult = guess === hostNum ? "correct" : guess > hostNum ? "lower" : "higher";
+  
+  if (botSniper && trueResult !== "correct" && Math.abs(guess - hostNum) <= 3) {
+    trueResult = "correct";
+  }
+  
+  const storedResult = trueResult;
+  
+  await fbPush(`/duels/${code}/guesses`, { player: "DebugBot", guess, result: storedResult, ts: Date.now() });
+  
+  if (trueResult === "correct") {
+    const newScore = (data.players.DebugBot.score || 0) + 1;
+    const newStreak = (data.players.DebugBot.streak || 0) + 1;
+    const allGuesses = data.guesses ? Object.values(data.guesses) : [];
+    const myG = allGuesses.filter(g => g.player === "DebugBot").length + 1;
+    const oppG = allGuesses.filter(g => g.player === hostName).length;
+    const isLucky = myG === 1;
+    let isSeriesWinner = false;
+    if (data.bestOf && newScore >= data.bestOf) isSeriesWinner = true;
+    
+    await fbPush(`/duels/${code}/roundHistory`, { round: S.round, winner: "DebugBot", myGuesses: myG, oppGuesses: oppG, myNum: data.players.DebugBot.number, oppNum: hostNum });
+    await fbUpdate(`/duels/${code}`, {
+      status: "finished", winner: "DebugBot", winnerStreak: newStreak, luckyShot: isLucky || null,
+      seriesWinner: isSeriesWinner ? "DebugBot" : null,
+      [`players/DebugBot/score`]: newScore, [`players/DebugBot/streak`]: newStreak, [`players/${hostName}/streak`]: 0,
+    });
+  } else {
+    if (data.players?.DebugBot?.secondChanceActive) {
+      await fbUpdate(`/duels/${code}/players/DebugBot`, { secondChanceActive: null });
+    } else if (data.players?.DebugBot?.doubleTapActive) {
+      await fbUpdate(`/duels/${code}/players/DebugBot`, { doubleTapActive: null });
+    } else if (!hasMod(data, "telepathy")) {
+      await fbUpdate(`/duels/${code}`, { turn: hostName });
+    }
+  }
+  
+  if (trueResult === "correct" || botSniper) {
+    await fbUpdate(`/duels/${code}/players/DebugBot`, { sniperActive: null });
   }
 }
