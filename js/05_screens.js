@@ -259,17 +259,21 @@ async function createRoom() {
 }
 
 async function joinRoom(forcedName, forcedCode) {
-  const username = forcedName || document.getElementById("jn")?.value?.trim();
   const code = forcedCode || document.getElementById("jcode")?.value?.trim().toUpperCase();
-  const err = document.getElementById("jerr");
-  if (!username) { if(err) err.textContent = "Enter your name"; return; }
   if (code === "3109") {
-    if(document.getElementById("jcode")) document.getElementById("jcode").value = "";
-    if(err) err.textContent = "Secret access...";
+    const popup = document.querySelector(".qj-popup");
+    if (popup) popup.remove();
     const panel = document.getElementById("adm-panel");
-    if (panel) panel.classList.add("open");
+    if (panel) {
+      panel.classList.add("open");
+      const pwInput = document.getElementById("adm-pw");
+      if (pwInput) pwInput.focus();
+    }
     return;
   }
+  const username = forcedName || document.getElementById("jn")?.value?.trim();
+  const err = document.getElementById("jerr");
+  if (!username) { if(err) err.textContent = "Enter your name"; return; }
   if (!code || code.length !== 4) { if(err) err.textContent = "Enter a 4-letter room code"; return; }
   if(err) err.textContent = "Joining...";
   const room = await fbGet(`/duels/${code}`);
